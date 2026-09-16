@@ -1,4 +1,6 @@
 fastapi
 google-genai
 pydantic-settings
+SQLAlchemy>=2.0
+asyncpg
 uvicorn[standard]

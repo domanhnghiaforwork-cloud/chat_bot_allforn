@@ -16,6 +16,11 @@ export default function MessageList({ messages, isLoading }: MessageListProps) {
 
   return (
     <section className="message-list" aria-live="polite" aria-label="Nội dung trò chuyện">
+      {messages.length === 0 && (
+        <div className="message message-assistant">
+          Xin chào! Tôi có thể giúp gì cho bạn?
+        </div>
+      )}
       {messages.map((message) => (
         <div key={message.id} className={`message message-${message.role}`}>
           {message.content}

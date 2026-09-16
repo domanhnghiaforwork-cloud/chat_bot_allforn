@@ -1,10 +1,13 @@
 import type { ChatResponse } from "../types/chat";
 
-export async function sendMessage(message: string): Promise<string> {
+export async function sendMessage(
+  conversationId: string,
+  message: string,
+): Promise<ChatResponse> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ conversation_id: conversationId, message }),
   });
 
   if (!response.ok) {
@@ -12,6 +15,5 @@ export async function sendMessage(message: string): Promise<string> {
     throw new Error(error?.detail ?? "Không thể kết nối đến chatbot");
   }
 
-  const data = (await response.json()) as ChatResponse;
-  return data.answer;
+  return response.json() as Promise<ChatResponse>;
 }

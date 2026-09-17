@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     target_history_recent_messages_ratio: float = Field(gt=0, le=1)
     max_output_ratio: float = Field(gt=0, le=1)
     recent_message_limit: int = Field(gt=0)
+    exact_token_count_threshold: float = Field(default=0.95, gt=0, le=1)
 
     # V4.2 mặc định tắt luồng mới để có thể deploy schema trước rồi mới cutover.
     async_chat_enabled: bool = False

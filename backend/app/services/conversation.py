@@ -60,7 +60,7 @@ async def chat(
     if not request:
         return None
 
-    gateway = LLMGateway(request.id)
+    gateway = LLMGateway(request.id, settings.exact_token_count_threshold)
     try:
         async with conversation_lock(conversation_id, settings):
             request.status = "GENERATING"

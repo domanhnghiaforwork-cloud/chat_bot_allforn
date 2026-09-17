@@ -106,7 +106,7 @@ async def process_job(message_id: str, request_id: UUID) -> None:
         await queue.complete(request_id)
         return
 
-    gateway = LLMGateway(request_id)
+    gateway = LLMGateway(request_id, settings.exact_token_count_threshold)
     logger.info(
         "generation_started",
         extra={

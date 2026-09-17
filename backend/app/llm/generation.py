@@ -10,5 +10,10 @@ class GenerationResult:
 
 
 def estimate_tokens(text: str) -> int:
-    """Ước lượng bảo thủ chỉ dùng để reserve TPM trước provider call."""
+    """Ước lượng bảo thủ để kiểm tra context và reserve TPM trước provider call."""
     return max(1, (len(text) + 2) // 3)
+
+
+def should_count_exactly(estimated: int, limit: int, threshold: float) -> bool:
+    """Chỉ gọi tokenizer của provider khi ước lượng đã sát giới hạn."""
+    return estimated >= limit * threshold

@@ -91,6 +91,11 @@ export const SETTING_PRESENTATION: Record<string, SettingPresentation> = {
     description: "Phần quota RPD được phép dùng; 0.9 tương đương 90%.",
     unit: "tỷ lệ 0–1",
   },
+  EXACT_TOKEN_COUNT_THRESHOLD: {
+    title: "Ngưỡng đếm token chính xác",
+    description: "Chỉ gọi Gemini count_tokens khi ước lượng chạm ngưỡng này; 0.95 tương đương 95% ngân sách.",
+    unit: "tỷ lệ 0–1",
+  },
   FALLBACK_ENABLED: {
     title: "Tự động chuyển model dự phòng",
     description: "Chuyển về model mặc định khi model khác tạm thời không khả dụng.",

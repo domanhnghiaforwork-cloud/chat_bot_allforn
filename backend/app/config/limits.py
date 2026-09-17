@@ -53,6 +53,7 @@ EDITABLE_SETTINGS = {
         _item("SAFE_RPM_RATIO", "number", "Model/Quota", 0.01, 1),
         _item("SAFE_TPM_RATIO", "number", "Model/Quota", 0.01, 1),
         _item("SAFE_RPD_RATIO", "number", "Model/Quota", 0.01, 1),
+        _item("EXACT_TOKEN_COUNT_THRESHOLD", "number", "Model/Quota", 0.5, 1),
         _item(
             "FALLBACK_ENABLED",
             "boolean",

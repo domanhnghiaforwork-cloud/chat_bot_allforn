@@ -8,10 +8,11 @@ from sqlalchemy import func, select
 
 from app.config.prompts import SUMMARY_PROMPT
 from app.config.runtime import runtime_settings
+from app.config.settings import get_settings
 from app.db.database import SessionLocal
 from app.llm.client import gemini_client
 from app.llm.errors import LLMError, normalize_provider_error
-from app.llm.generation import GenerationResult, estimate_tokens
+from app.llm.generation import GenerationResult, estimate_tokens, should_count_exactly
 from app.memory.context_builder import ChatContext, messages_to_contents
 from app.models import GenerationRequest, Message, ModelUsage
 from app.rate_limit.model_limiter import ModelLimiter
@@ -22,6 +23,16 @@ from app.routing.model_router import route_model
 
 DeltaCallback = Callable[[str], Awaitable[None]]
 logger = logging.getLogger(__name__)
+
+
+def _messages_text(messages: list[Message]) -> str:
+    return "\n".join(f"{message.role}: {message.content}" for message in messages)
+
+
+def _context_text(context: ChatContext) -> str:
+    return context.system_instruction + "\n" + "\n".join(
+        part.text or "" for content in context.contents for part in (content.parts or [])
+    )
 
 
 async def _provider_count_tokens(
@@ -41,9 +52,14 @@ async def _provider_count_tokens(
 
 
 class LLMGateway:
-    def __init__(self, request_id: UUID):
+    def __init__(self, request_id: UUID, exact_count_threshold: float | None = None):
         self.request_id = request_id
         self.model_limiter = ModelLimiter()
+        self.exact_count_threshold = (
+            exact_count_threshold
+            if exact_count_threshold is not None
+            else get_settings().exact_token_count_threshold
+        )
 
     async def _write_usage(
         self,
@@ -159,6 +175,30 @@ class LLMGateway:
     async def count_context_tokens(self, context: ChatContext) -> int:
         return await self._count(context.contents, context.system_instruction, "chat")
 
+    async def measure_text_tokens(
+        self, text: str, limit: int, operation: str = "chat"
+    ) -> int:
+        if not text:
+            return 0
+        estimated = estimate_tokens(text)
+        if should_count_exactly(estimated, limit, self.exact_count_threshold):
+            return await self.count_text_tokens(text, operation)
+        return estimated
+
+    async def measure_message_tokens(self, messages: list[Message], limit: int) -> int:
+        if not messages:
+            return 0
+        estimated = estimate_tokens(_messages_text(messages))
+        if should_count_exactly(estimated, limit, self.exact_count_threshold):
+            return await self.count_message_tokens(messages)
+        return estimated
+
+    async def measure_context_tokens(self, context: ChatContext, limit: int) -> int:
+        estimated = estimate_tokens(_context_text(context))
+        if should_count_exactly(estimated, limit, self.exact_count_threshold):
+            return await self.count_context_tokens(context)
+        return estimated
+
     async def generate_once(
         self,
         context: ChatContext,
@@ -170,10 +210,7 @@ class LLMGateway:
     ) -> GenerationResult:
         settings = await runtime_settings()
         model = model_override or route_model(operation, requested_model, settings)
-        prompt_text = context.system_instruction + "\n" + "\n".join(
-            part.text or "" for content in context.contents for part in (content.parts or [])
-        )
-        estimated = estimate_tokens(prompt_text)
+        estimated = estimate_tokens(_context_text(context))
         if not await ensure_circuit_closed(settings.gemini_quota_project_id, model):
             raise LLMError("PROVIDER_UNAVAILABLE", "Circuit model đang mở", retryable=True)
         reservation = await self.model_limiter.reserve(settings, model, estimated)
@@ -282,7 +319,9 @@ class LLMGateway:
                     middle = (left + right) // 2
                     candidate_take = sizes[middle]
                     candidate = prompt_for(candidate_take)
-                    if await self.count_text_tokens(candidate, "summary") <= settings.max_summary_input_tokens:
+                    if await self.measure_text_tokens(
+                        candidate, settings.max_summary_input_tokens, "summary"
+                    ) <= settings.max_summary_input_tokens:
                         take, prompt = candidate_take, candidate
                         left = middle + 1
                     else:
@@ -291,7 +330,9 @@ class LLMGateway:
                     raise LLMError(
                         "INPUT_TOO_LARGE", "Một lượt hội thoại quá lớn cho model summary"
                     )
-            elif await self.count_text_tokens(prompt, "summary") > settings.max_summary_input_tokens:
+            elif await self.measure_text_tokens(
+                prompt, settings.max_summary_input_tokens, "summary"
+            ) > settings.max_summary_input_tokens:
                 raise LLMError("INPUT_TOO_LARGE", "Summary cũ quá lớn để nén")
 
             context = ChatContext(system_instruction=SUMMARY_PROMPT, contents=[

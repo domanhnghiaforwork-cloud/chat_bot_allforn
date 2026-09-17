@@ -62,7 +62,7 @@ async def _summary_cut_for_target(
         remaining = messages[cut:]
         fits = (
             len(remaining) <= max_count
-            and await gateway.count_message_tokens(remaining) <= target_tokens
+            and await gateway.measure_message_tokens(remaining, target_tokens) <= target_tokens
         )
         if fits:
             selected = cut
@@ -80,7 +80,7 @@ async def _summary_cut_for_target(
     if (
         latest_turn
         and len(latest_turn) <= max_count
-        and await gateway.count_message_tokens(latest_turn) <= max_tokens
+        and await gateway.measure_message_tokens(latest_turn, max_tokens) <= max_tokens
     ):
         return latest_turn_start
 
@@ -95,8 +95,12 @@ async def prepare_memory(
     gateway: LLMGateway,
 ) -> PreparedMemory:
     settings = get_settings()
-    system_tokens = await gateway.count_text_tokens(SYSTEM_PROMPT)
-    question_tokens = await gateway.count_text_tokens(question)
+    system_tokens = await gateway.measure_text_tokens(
+        SYSTEM_PROMPT, settings.max_system_prompt_tokens
+    )
+    question_tokens = await gateway.measure_text_tokens(
+        question, settings.max_user_input_tokens
+    )
     if system_tokens > settings.max_system_prompt_tokens:
         raise LLMError("INPUT_TOO_LARGE", "System Prompt vượt ngân sách token")
     if question_tokens > settings.max_user_input_tokens:
@@ -113,13 +117,17 @@ async def prepare_memory(
     # Nén lại summary cũ nếu cấu hình token mới nhỏ hơn dữ liệu đã lưu.
     if (
         summary_text
-        and await gateway.count_text_tokens(summary_text, "summary")
+        and await gateway.measure_text_tokens(
+            summary_text, settings.max_history_summary_tokens, "summary"
+        )
         > settings.max_history_summary_tokens
     ):
         summary_text = await gateway.generate_summary(summary_text, [])
         changed = True
 
-    recent_tokens = await gateway.count_message_tokens(recent)
+    recent_tokens = await gateway.measure_message_tokens(
+        recent, settings.max_history_recent_messages_tokens
+    )
     exceeds_count = len(recent) > settings.recent_message_limit
     exceeds_tokens = recent_tokens > settings.max_history_recent_messages_tokens
 
@@ -132,7 +140,9 @@ async def prepare_memory(
             gateway,
         )
         summary_text = await gateway.generate_summary(summary_text, recent[:summarize_count])
-        if await gateway.count_text_tokens(summary_text, "summary") > settings.max_history_summary_tokens:
+        if await gateway.measure_text_tokens(
+            summary_text, settings.max_history_summary_tokens, "summary"
+        ) > settings.max_history_summary_tokens:
             raise LLMError("INPUT_TOO_LARGE", "Summary vượt ngân sách token")
         summarized_count += summarize_count
         recent = recent[summarize_count:]
@@ -140,20 +150,26 @@ async def prepare_memory(
 
     if (
         summary_text
-        and await gateway.count_text_tokens(summary_text, "summary")
+        and await gateway.measure_text_tokens(
+            summary_text, settings.max_history_summary_tokens, "summary"
+        )
         > settings.max_history_summary_tokens
     ):
         raise LLMError("INPUT_TOO_LARGE", "Summary vượt ngân sách token")
 
     # Kiểm tra tổng input thực tế, gồm cả role và phần nhãn summary.
     context = build_context(summary_text or None, recent, question)
-    while await gateway.count_context_tokens(context) > settings.max_chat_input_tokens:
+    while await gateway.measure_context_tokens(
+        context, settings.max_chat_input_tokens
+    ) > settings.max_chat_input_tokens:
         if not recent:
             raise LLMError("INPUT_TOO_LARGE", "Không thể thu gọn context vào ngân sách input")
         # Nhánh dự phòng chỉ tóm tắt lượt hoàn chỉnh cũ nhất, không dùng batch cố định.
         summarize_count = _keep_complete_turn(recent, 1)
         summary_text = await gateway.generate_summary(summary_text, recent[:summarize_count])
-        if await gateway.count_text_tokens(summary_text, "summary") > settings.max_history_summary_tokens:
+        if await gateway.measure_text_tokens(
+            summary_text, settings.max_history_summary_tokens, "summary"
+        ) > settings.max_history_summary_tokens:
             raise LLMError("INPUT_TOO_LARGE", "Summary vượt ngân sách token")
         summarized_count += summarize_count
         recent = recent[summarize_count:]

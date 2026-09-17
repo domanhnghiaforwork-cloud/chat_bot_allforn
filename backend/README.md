@@ -21,7 +21,8 @@ Thêm API key vào `.env`:
 ```env
 GEMINI_API_KEY=your_api_key
 GEMINI_MODEL=gemini-3.5-flash-lite
-MAX_OUTPUT_TOKENS=1024
+CHAT_CONTEXT_WINDOW_TOKENS=10000
+SUMMARY_CONTEXT_WINDOW_TOKENS=15000
 ```
 
 Chạy ứng dụng:
@@ -40,3 +41,11 @@ Invoke-RestMethod -Method Post `
 ```
 
 Tạo hội thoại trước bằng `POST /conversations`. Các bảng được tự tạo khi ứng dụng khởi động; production nên dùng Alembic.
+
+## Ngân sách token
+
+`CHAT_CONTEXT_WINDOW_TOKENS` được chia theo tỷ lệ trong `.env`: input 75% và output 25%. Input gồm system 5%, câu hỏi 10%, summary 15% và recent messages tối đa 45%.
+
+Khi recent vượt 45%, các cặp hỏi–đáp cũ được gối vào summary để recent về gần `TARGET_HISTORY_RECENT_MESSAGES_RATIO=30%`. `RECENT_MESSAGE_LIMIT` là ngưỡng an toàn phụ cho nhiều message rất ngắn. Message chỉ bị loại khỏi recent sau khi đã được gối thành công vào summary.
+
+Model summary dùng `SUMMARY_CONTEXT_WINDOW_TOKENS` riêng. Input tối đa của mỗi lượt summary bằng context này trừ ngân sách output summary; dữ liệu lớn được chia thành nhiều batch tại ranh giới cặp hỏi–đáp.

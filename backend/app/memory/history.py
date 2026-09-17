@@ -10,6 +10,7 @@ async def load_history(session: AsyncSession, conversation_id: UUID) -> list[Mes
     result = await session.scalars(
         select(Message)
         .where(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at, Message.id)
+        # Bản ghi cũ có thể trùng created_at; "user" phải đứng trước "assistant".
+        .order_by(Message.created_at, Message.role.desc(), Message.id)
     )
     return list(result)

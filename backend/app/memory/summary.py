@@ -1,39 +1,178 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.prompts import SYSTEM_PROMPT
 from app.config.settings import get_settings
 from app.db.models import ConversationSummary, Message, utc_now
-from app.services.gemini import generate_summary
+from app.memory.context_builder import build_context
+from app.services.gemini import (
+    GeminiServiceError,
+    count_context_tokens,
+    count_message_tokens,
+    count_text_tokens,
+    generate_summary,
+)
 
 
-async def refresh_summary(
+@dataclass(slots=True)
+class PreparedMemory:
+    summary: str | None
+    recent_messages: list[Message]
+
+
+def _keep_complete_turn(messages: list[Message], count: int) -> int:
+    """Không cắt rời câu hỏi user khỏi câu trả lời assistant ngay sau nó."""
+    count = min(max(count, 0), len(messages))
+    if (
+        0 < count < len(messages)
+        and messages[count - 1].role == "user"
+        and messages[count].role == "assistant"
+    ):
+        count += 1
+    return count
+
+
+def _complete_turn_boundaries(messages: list[Message]) -> list[int]:
+    """Các vị trí có thể cắt mà không tách user khỏi assistant ngay sau nó."""
+    return [
+        index
+        for index in range(1, len(messages) + 1)
+        if index == len(messages)
+        or not (
+            messages[index - 1].role == "user"
+            and messages[index].role == "assistant"
+        )
+    ]
+
+
+async def _summary_cut_for_target(
+    messages: list[Message],
+    target_tokens: int,
+    max_tokens: int,
+    max_count: int,
+) -> int:
+    """Tìm prefix cũ cần tóm tắt để suffix mới về gần ngân sách mục tiêu."""
+    boundaries = [0, *_complete_turn_boundaries(messages)]
+    non_empty_cuts = boundaries[:-1]
+    left, right = 0, len(non_empty_cuts) - 1
+    selected: int | None = None
+
+    # Token của suffix giảm theo điểm cắt, nên dùng binary search để giảm số lần
+    # gọi tokenizer của model.
+    while left <= right:
+        middle = (left + right) // 2
+        cut = non_empty_cuts[middle]
+        remaining = messages[cut:]
+        fits = (
+            len(remaining) <= max_count
+            and await count_message_tokens(remaining) <= target_tokens
+        )
+        if fits:
+            selected = cut
+            right = middle - 1
+        else:
+            left = middle + 1
+
+    if selected is not None:
+        return selected
+
+    # Nếu riêng lượt mới nhất đã lớn hơn target nhưng vẫn dưới mức tối đa,
+    # giữ nguyên lượt đó thay vì đẩy toàn bộ ngữ cảnh gần nhất vào summary.
+    latest_turn_start = boundaries[-2] if len(boundaries) > 1 else 0
+    latest_turn = messages[latest_turn_start:]
+    if (
+        latest_turn
+        and len(latest_turn) <= max_count
+        and await count_message_tokens(latest_turn) <= max_tokens
+    ):
+        return latest_turn_start
+
+    return len(messages)
+
+
+async def prepare_memory(
     session: AsyncSession,
     conversation_id: UUID,
     messages: list[Message],
-) -> None:
+    question: str,
+) -> PreparedMemory:
     settings = get_settings()
-    summary = await session.get(ConversationSummary, conversation_id)
-    summarized_count = summary.summarized_message_count if summary else 0
-    target_count = max(0, len(messages) - settings.recent_message_limit)
+    system_tokens = await count_text_tokens(SYSTEM_PROMPT)
+    question_tokens = await count_text_tokens(question)
+    if system_tokens > settings.max_system_prompt_tokens:
+        raise GeminiServiceError("System Prompt vượt ngân sách token")
+    if question_tokens > settings.max_user_input_tokens:
+        raise GeminiServiceError("Câu hỏi vượt ngân sách token")
 
-    # Tóm tắt theo lô để không gọi Gemini sau mọi tin nhắn.
-    if target_count - summarized_count < settings.summary_batch_size:
-        return
+    summary_row = await session.get(ConversationSummary, conversation_id)
+    summary_text = summary_row.content if summary_row else ""
+    summarized_count = summary_row.summarized_message_count if summary_row else 0
+    recent = messages[summarized_count:]
+    changed = False
 
-    content = await generate_summary(
-        summary.content if summary else "",
-        messages[summarized_count:target_count],
-    )
-    if summary:
-        summary.content = content
-        summary.summarized_message_count = target_count
-        summary.updated_at = utc_now()
-    else:
-        session.add(
-            ConversationSummary(
-                conversation_id=conversation_id,
-                content=content,
-                summarized_message_count=target_count,
-            )
+    # Nén lại summary cũ nếu cấu hình token mới nhỏ hơn dữ liệu đã lưu.
+    if (
+        summary_text
+        and await count_text_tokens(summary_text)
+        > settings.max_history_summary_tokens
+    ):
+        summary_text = await generate_summary(summary_text, [])
+        changed = True
+
+    recent_tokens = await count_message_tokens(recent)
+    exceeds_count = len(recent) > settings.recent_message_limit
+    exceeds_tokens = recent_tokens > settings.max_history_recent_messages_tokens
+
+    if exceeds_count or exceeds_tokens:
+        summarize_count = await _summary_cut_for_target(
+            recent,
+            settings.target_history_recent_messages_tokens,
+            settings.max_history_recent_messages_tokens,
+            settings.recent_message_limit,
         )
+        summary_text = await generate_summary(summary_text, recent[:summarize_count])
+        if await count_text_tokens(summary_text) > settings.max_history_summary_tokens:
+            raise GeminiServiceError("Summary vượt ngân sách token")
+        summarized_count += summarize_count
+        recent = recent[summarize_count:]
+        changed = True
+
+    if (
+        summary_text
+        and await count_text_tokens(summary_text)
+        > settings.max_history_summary_tokens
+    ):
+        raise GeminiServiceError("Summary vượt ngân sách token")
+
+    # Kiểm tra tổng input thực tế, gồm cả role và phần nhãn summary.
+    context = build_context(summary_text or None, recent, question)
+    while await count_context_tokens(context) > settings.max_chat_input_tokens:
+        if not recent:
+            raise GeminiServiceError("Không thể thu gọn context vào ngân sách input")
+        # Nhánh dự phòng chỉ tóm tắt lượt hoàn chỉnh cũ nhất, không dùng batch cố định.
+        summarize_count = _keep_complete_turn(recent, 1)
+        summary_text = await generate_summary(summary_text, recent[:summarize_count])
+        if await count_text_tokens(summary_text) > settings.max_history_summary_tokens:
+            raise GeminiServiceError("Summary vượt ngân sách token")
+        summarized_count += summarize_count
+        recent = recent[summarize_count:]
+        changed = True
+        context = build_context(summary_text, recent, question)
+
+    if changed:
+        if summary_row:
+            summary_row.content = summary_text
+            summary_row.summarized_message_count = summarized_count
+            summary_row.updated_at = utc_now()
+        else:
+            session.add(
+                ConversationSummary(
+                    conversation_id=conversation_id,
+                    content=summary_text,
+                    summarized_message_count=summarized_count,
+                )
+            )
+
+    return PreparedMemory(summary=summary_text or None, recent_messages=recent)

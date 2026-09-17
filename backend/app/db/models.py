@@ -24,7 +24,7 @@ class Conversation(Base):
     messages: Mapped[list["Message"]] = relationship(
         back_populates="conversation",
         cascade="all, delete-orphan",
-        order_by="Message.created_at",
+        order_by=lambda: (Message.created_at, Message.role.desc(), Message.id),
     )
     summary: Mapped["ConversationSummary | None"] = relationship(
         back_populates="conversation",

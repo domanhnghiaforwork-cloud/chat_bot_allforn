@@ -1,22 +1,26 @@
-# Chatbot Gemini v2
+# Chatbot Gemini v3
 
-Chatbot Next.js + FastAPI có lịch sử hội thoại trong PostgreSQL. Context gửi Gemini gồm `System Prompt + Summary + Recent Messages + Current Question`.
-
-Chat và summary có context riêng qua `CHAT_CONTEXT_WINDOW_TOKENS` và `SUMMARY_CONTEXT_WINDOW_TOKENS`. Khi recent vượt 45% context chat, các cặp hỏi–đáp cũ được gối vào summary để recent về gần 30%; giới hạn 200 message là lớp an toàn phụ.
+Chatbot Next.js + FastAPI hỗ trợ nhiều tài khoản. Mỗi user chỉ truy cập được hội thoại và message của chính mình; bộ nhớ `Summary + Recent Messages` từ v2 được giữ nguyên.
 
 ## Chạy
 
-1. Tạo PostgreSQL database `chatbot` và thêm `DATABASE_URL` vào `backend/.env` theo `backend/.env.example`.
-2. Chạy backend:
+1. Cấu hình `backend/.env` theo `backend/.env.example`.
+2. Nâng schema database:
 
 ```powershell
 cd backend
-..\..\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+alembic upgrade head
+```
+
+Nếu database v2 đã có hội thoại, đặt thêm `V2_OWNER_EMAIL` và `V2_OWNER_PASSWORD` để gán toàn bộ dữ liệu cũ cho tài khoản đó.
+
+3. Chạy backend:
+
+```powershell
 uvicorn app.main:app --reload
 ```
 
-3. Chạy frontend ở terminal khác:
+4. Chạy frontend ở terminal khác:
 
 ```powershell
 cd frontend
@@ -24,4 +28,4 @@ npm install
 npm run dev
 ```
 
-Mở `http://localhost:3000`.
+Mở `http://localhost:3000`, đăng ký tài khoản rồi tạo hội thoại.

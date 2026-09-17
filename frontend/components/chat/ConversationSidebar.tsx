@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { listConversations } from "../services/conversationApi";
-import type { Conversation } from "../types/conversation";
+import { listConversations } from "../../services/conversationApi";
+import { clearAuthSession } from "../../stores/authStore";
+import type { User } from "../../types/auth";
+import type { Conversation } from "../../types/conversation";
 import NewChatButton from "./NewChatButton";
 
-export default function ConversationSidebar() {
+export default function ConversationSidebar({ user }: { user: User }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [error, setError] = useState("");
 
@@ -24,13 +27,21 @@ export default function ConversationSidebar() {
 
   useEffect(() => {
     void loadConversations();
-    // ChatBox phát sự kiện này khi tiêu đề hoặc danh sách hội thoại thay đổi.
     window.addEventListener("conversations-changed", loadConversations);
     return () => window.removeEventListener("conversations-changed", loadConversations);
   }, [pathname, loadConversations]);
 
+  function logout() {
+    clearAuthSession();
+    router.replace("/login");
+  }
+
   return (
     <aside className="conversation-sidebar">
+      <div className="sidebar-user">
+        <span title={user.email}>{user.email}</span>
+        <button type="button" onClick={logout}>Đăng xuất</button>
+      </div>
       <NewChatButton />
       <nav aria-label="Lịch sử hội thoại">
         {conversations.map((conversation) => (

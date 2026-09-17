@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import { getConversation } from "../services/conversationApi";
-import { sendMessage } from "../services/chatApi";
-import type { Message } from "../types/chat";
+import { sendMessage } from "../../services/chatApi";
+import { getConversation } from "../../services/conversationApi";
+import type { Message } from "../../types/chat";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
 
@@ -30,7 +30,6 @@ export default function ChatBox({ conversationId }: ChatBoxProps) {
         if (!active) return;
         setTitle(conversation.title);
         setMessages(conversation.messages);
-        setLoadError("");
         setIsReady(true);
       })
       .catch((error: unknown) => {
@@ -43,10 +42,7 @@ export default function ChatBox({ conversationId }: ChatBoxProps) {
 
   async function handleSend(content: string) {
     const temporaryId = crypto.randomUUID();
-    setMessages((current) => [
-      ...current,
-      { id: temporaryId, role: "user", content },
-    ]);
+    setMessages((current) => [...current, { id: temporaryId, role: "user", content }]);
     setIsLoading(true);
 
     try {
@@ -79,7 +75,7 @@ export default function ChatBox({ conversationId }: ChatBoxProps) {
         <div className="chat-avatar" aria-hidden="true">AI</div>
         <div>
           <h1>{title}</h1>
-          <p>V2 · Có lịch sử và bộ nhớ tóm tắt</p>
+          <p>V3 · Hội thoại thuộc tài khoản hiện tại</p>
         </div>
       </header>
       {loadError ? (

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from math import isclose
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +11,9 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str
     database_url: str
+    jwt_secret_key: str = Field(min_length=32)
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"]
+    access_token_expire_minutes: int = Field(gt=0)
 
     chat_context_window_tokens: int = Field(gt=0)
     summary_context_window_tokens: int = Field(gt=0)

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { createConversation } from "../services/conversationApi";
+import { createConversation } from "../../services/conversationApi";
 
 export default function NewChatButton() {
   const router = useRouter();

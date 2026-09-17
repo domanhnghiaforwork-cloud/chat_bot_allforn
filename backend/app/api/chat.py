@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import CurrentUser
 from app.db.database import get_session
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.conversation import chat as chat_service
@@ -12,10 +13,16 @@ router = APIRouter(tags=["chat"])
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     payload: ChatRequest,
+    current_user: CurrentUser,
     session: AsyncSession = Depends(get_session),
 ) -> ChatResponse:
     try:
-        result = await chat_service(session, payload.conversation_id, payload.message)
+        result = await chat_service(
+            session,
+            payload.conversation_id,
+            current_user.id,
+            payload.message,
+        )
     except GeminiServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

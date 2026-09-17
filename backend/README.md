@@ -1,6 +1,6 @@
-# Chatbot v2
+# Chatbot v3 - Backend
 
-Chatbot có lịch sử hội thoại, summary và recent messages bằng FastAPI, PostgreSQL và Google GenAI SDK.
+FastAPI + PostgreSQL + Gemini, có JWT, mật khẩu Argon2 và dữ liệu hội thoại tách theo user.
 
 ## Cài đặt
 
@@ -10,42 +10,27 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Tạo database PostgreSQL `chatbot`, sau đó cấu hình `.env` theo `.env.example`. URL phải dùng driver asyncpg:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/chatbot
-```
-
-Thêm API key vào `.env`:
-
-```env
-GEMINI_API_KEY=your_api_key
-GEMINI_MODEL=gemini-3.5-flash-lite
-CHAT_CONTEXT_WINDOW_TOKENS=10000
-SUMMARY_CONTEXT_WINDOW_TOKENS=15000
-```
-
-Chạy ứng dụng:
+Tạo `.env` theo `.env.example`, sau đó chạy migration và ứng dụng:
 
 ```powershell
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Kiểm thử tại `http://127.0.0.1:8000/docs` hoặc:
+Với database v2 đang có hội thoại, migration không tự chọn chủ sở hữu. Đặt hai biến sau trước khi chạy:
 
-```powershell
-Invoke-RestMethod -Method Post `
-  -Uri http://127.0.0.1:8000/chat `
-  -ContentType 'application/json' `
-  -Body '{"conversation_id":"<uuid>","message":"Xin chào"}'
+```env
+V2_OWNER_EMAIL=owner@example.com
+V2_OWNER_PASSWORD=your_password_at_least_8_chars
 ```
 
-Tạo hội thoại trước bằng `POST /conversations`. Các bảng được tự tạo khi ứng dụng khởi động; production nên dùng Alembic.
+Tài khoản này được tạo trong migration và nhận toàn bộ hội thoại v2. Database mới không cần hai biến trên.
 
-## Ngân sách token
+## API chính
 
-`CHAT_CONTEXT_WINDOW_TOKENS` được chia theo tỷ lệ trong `.env`: input 75% và output 25%. Input gồm system 5%, câu hỏi 10%, summary 15% và recent messages tối đa 45%.
+- `POST /auth/register`: tạo tài khoản và trả access token.
+- `POST /auth/login`: đăng nhập.
+- `GET /users/me`: lấy user hiện tại.
+- `/conversations` và `/chat`: yêu cầu `Authorization: Bearer <token>`.
 
-Khi recent vượt 45%, các cặp hỏi–đáp cũ được gối vào summary để recent về gần `TARGET_HISTORY_RECENT_MESSAGES_RATIO=30%`. `RECENT_MESSAGE_LIMIT` là ngưỡng an toàn phụ cho nhiều message rất ngắn. Message chỉ bị loại khỏi recent sau khi đã được gối thành công vào summary.
-
-Model summary dùng `SUMMARY_CONTEXT_WINDOW_TOKENS` riêng. Input tối đa của mỗi lượt summary bằng context này trừ ngân sách output summary; dữ liệu lớn được chia thành nhiều batch tại ranh giới cặp hỏi–đáp.
+Context Gemini vẫn theo v2: `System Prompt + Summary + Recent Messages + Current Question`, với ngân sách token cấu hình hoàn toàn qua ENV.

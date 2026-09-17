@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from google.genai import types
 
 from app.config.prompts import SYSTEM_PROMPT
-from app.db.models import Message
+from app.models import Message
 
 
 @dataclass(slots=True)

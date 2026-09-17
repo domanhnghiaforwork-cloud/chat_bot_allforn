@@ -14,7 +14,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body { background: var(--background); color: var(--text); }
-button, textarea { font: inherit; }
+button, input, textarea { font: inherit; }
 
 .app-shell {
   display: grid;
@@ -29,6 +29,30 @@ button, textarea { font: inherit; }
   padding: 18px;
   overflow: hidden;
   background: #111827;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e2e8f0;
+  font-size: .82rem;
+}
+
+.sidebar-user span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user button {
+  padding: 5px 7px;
+  color: #cbd5e1;
+  background: transparent;
+  border: 1px solid #475569;
+  border-radius: 7px;
+  cursor: pointer;
 }
 
 .new-chat-button {
@@ -77,6 +101,35 @@ main {
 .empty-chat .chat-avatar { margin: 0 auto; }
 .empty-chat h1 { margin-bottom: 8px; }
 .empty-chat p { color: var(--muted); }
+
+.auth-main {
+  display: grid;
+  min-height: 100dvh;
+  padding: 24px;
+  place-items: center;
+}
+
+.auth-card {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 410px);
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgb(16 24 40 / 10%);
+}
+
+.auth-card h1, .auth-card p { margin: 0; }
+.auth-card > div p, .auth-switch { margin-top: 7px; color: var(--muted); }
+.auth-card label { display: grid; gap: 7px; font-size: .9rem; font-weight: 600; }
+.auth-card input { padding: 12px; border: 1px solid var(--border); border-radius: 10px; outline: none; }
+.auth-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgb(71 87 230 / 12%); }
+.auth-card > button { padding: 12px; color: #fff; background: var(--primary); border: 0; border-radius: 10px; cursor: pointer; font-weight: 600; }
+.auth-card > button:disabled { opacity: .6; }
+.auth-error { color: var(--danger); }
+.auth-switch { text-align: center; font-size: .9rem; }
+.auth-switch a { color: var(--primary); font-weight: 600; }
 
 .chat-box {
   display: grid;

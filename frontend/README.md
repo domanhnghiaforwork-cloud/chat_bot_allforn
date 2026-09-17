@@ -1,8 +1,8 @@
-# Chatbot v2 - Frontend
+# Chatbot v3 - Frontend
 
-Frontend Next.js + TypeScript cho chatbot v2. Sidebar quản lý các hội thoại; route `/chat/[conversationId]` tải lại message đã lưu trong PostgreSQL.
+Next.js App Router + TypeScript với trang đăng ký/đăng nhập, auth store và danh sách hội thoại riêng cho user hiện tại.
 
-## Chạy ứng dụng
+## Chạy
 
 ```powershell
 npm install
@@ -10,6 +10,4 @@ Copy-Item .env.local.example .env.local
 npm run dev
 ```
 
-Mặc định frontend chạy tại `http://localhost:3000` và chuyển tiếp `/api/*` tới FastAPI tại `http://127.0.0.1:8000/*`.
-
-Nếu backend chạy ở địa chỉ khác, sửa `BACKEND_URL` trong `.env.local` rồi khởi động lại frontend.
+Frontend chuyển tiếp `/api/*` tới FastAPI theo `BACKEND_URL`. Access token của v3 được lưu trong local storage; cookie HttpOnly và refresh token thuộc bước hardening production tiếp theo.

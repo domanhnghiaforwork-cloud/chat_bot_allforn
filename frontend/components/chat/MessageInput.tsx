@@ -36,9 +36,7 @@ export default function MessageInput({ disabled, onSend }: MessageInputProps) {
         onChange={(event) => setMessage(event.currentTarget.value)}
         onKeyDown={handleKeyDown}
       />
-      <button type="submit" disabled={disabled || !message.trim()}>
-        Gửi
-      </button>
+      <button type="submit" disabled={disabled || !message.trim()}>Gửi</button>
     </form>
   );
 }

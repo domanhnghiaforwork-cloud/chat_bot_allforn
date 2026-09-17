@@ -3,7 +3,7 @@ from google.genai import types
 
 from app.config.prompts import SUMMARY_PROMPT
 from app.config.settings import get_settings
-from app.db.models import Message
+from app.models import Message
 from app.memory.context_builder import ChatContext, messages_to_contents
 from app.utils.token_counter import count_tokens
 

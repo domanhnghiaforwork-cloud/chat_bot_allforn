@@ -4,3 +4,7 @@ pydantic-settings
 SQLAlchemy>=2.0
 asyncpg
 uvicorn[standard]
+alembic
+email-validator
+PyJWT
+pwdlib[argon2]

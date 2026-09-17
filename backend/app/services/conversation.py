@@ -1,49 +1,40 @@
 from datetime import timedelta
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.db.models import Conversation, Message, utc_now
+from app.db.repository import conversations, messages
 from app.memory.context_builder import build_context
 from app.memory.history import load_history
 from app.memory.summary import prepare_memory
+from app.models import Conversation, Message, utc_now
 from app.services.gemini import generate_reply
 
 
-async def create_conversation(session: AsyncSession) -> Conversation:
-    conversation = Conversation()
-    session.add(conversation)
+async def create_conversation(session: AsyncSession, user_id: UUID) -> Conversation:
+    conversation = await conversations.create(session, user_id)
     await session.commit()
     await session.refresh(conversation)
     return conversation
 
 
-async def list_conversations(session: AsyncSession) -> list[Conversation]:
-    result = await session.scalars(
-        select(Conversation).order_by(Conversation.updated_at.desc())
-    )
-    return list(result)
+async def list_conversations(session: AsyncSession, user_id: UUID) -> list[Conversation]:
+    return await conversations.list_by_user(session, user_id)
 
 
 async def get_conversation(
-    session: AsyncSession, conversation_id: UUID
+    session: AsyncSession, conversation_id: UUID, user_id: UUID
 ) -> Conversation | None:
-    return await session.scalar(
-        select(Conversation)
-        .where(Conversation.id == conversation_id)
-        .options(selectinload(Conversation.messages))
+    return await conversations.get_owned(
+        session, conversation_id, user_id, with_messages=True
     )
 
 
 async def chat(
-    session: AsyncSession, conversation_id: UUID, question: str
+    session: AsyncSession, conversation_id: UUID, user_id: UUID, question: str
 ) -> tuple[str, Message, Message] | None:
-    conversation = await session.scalar(
-        select(Conversation)
-        .where(Conversation.id == conversation_id)
-    )
+    # Lọc user_id ngay trong query để không lộ hoặc dùng nhầm hội thoại người khác.
+    conversation = await conversations.get_owned(session, conversation_id, user_id)
     if not conversation:
         return None
 
@@ -59,19 +50,14 @@ async def chat(
     answer = await generate_reply(context)
 
     created_at = utc_now()
-    user_message = Message(
-        conversation_id=conversation_id,
-        role="user",
-        content=question,
-        created_at=created_at,
+    user_message, assistant_message = await messages.add_pair(
+        session,
+        conversation_id,
+        question,
+        answer,
+        created_at,
+        created_at + timedelta(microseconds=1),
     )
-    assistant_message = Message(
-        conversation_id=conversation_id,
-        role="assistant",
-        content=answer,
-        created_at=created_at + timedelta(microseconds=1),
-    )
-    session.add_all([user_message, assistant_message])
     if not history:
         conversation.title = question[:117] + ("..." if len(question) > 117 else "")
     conversation.updated_at = utc_now()

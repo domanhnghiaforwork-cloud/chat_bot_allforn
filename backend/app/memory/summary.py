@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.prompts import SYSTEM_PROMPT
 from app.config.settings import get_settings
-from app.db.models import ConversationSummary, Message, utc_now
+from app.models import ConversationSummary, Message, utc_now
 from app.memory.context_builder import build_context
 from app.services.gemini import (
     GeminiServiceError,

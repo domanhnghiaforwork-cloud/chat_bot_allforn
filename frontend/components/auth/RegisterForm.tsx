@@ -25,7 +25,7 @@ export default function RegisterForm() {
     try {
       const result = await register(credentials);
       saveAuthSession(result.access_token, result.user);
-      router.replace("/");
+      router.replace("/chat");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không thể đăng ký");
     } finally {

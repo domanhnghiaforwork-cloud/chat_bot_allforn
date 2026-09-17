@@ -8,3 +8,5 @@ alembic
 email-validator
 PyJWT
 pwdlib[argon2]
+redis>=5.0
+tzdata

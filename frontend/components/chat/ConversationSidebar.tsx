@@ -43,6 +43,7 @@ export default function ConversationSidebar({ user }: { user: User }) {
         <button type="button" onClick={logout}>Đăng xuất</button>
       </div>
       <NewChatButton />
+      {user.role === "admin" && <Link className="admin-link" href="/admin">Quản trị hệ thống</Link>}
       <nav aria-label="Lịch sử hội thoại">
         {conversations.map((conversation) => (
           <Link

@@ -5,9 +5,10 @@ import type { Message } from "../../types/chat";
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
+  partial?: string;
 }
 
-export default function MessageList({ messages, isLoading }: MessageListProps) {
+export default function MessageList({ messages, isLoading, partial = "" }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function MessageList({ messages, isLoading }: MessageListProps) {
           {message.content}
         </div>
       ))}
+      {partial && <div className="message message-assistant">{partial}</div>}
       {isLoading && (
         <div className="message message-assistant typing" aria-label="Chatbot đang trả lời">
           <span /><span /><span />

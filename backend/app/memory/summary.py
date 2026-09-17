@@ -7,13 +7,7 @@ from app.config.prompts import SYSTEM_PROMPT
 from app.config.settings import get_settings
 from app.models import ConversationSummary, Message, utc_now
 from app.memory.context_builder import build_context
-from app.services.gemini import (
-    GeminiServiceError,
-    count_context_tokens,
-    count_message_tokens,
-    count_text_tokens,
-    generate_summary,
-)
+from app.llm import LLMError, LLMGateway
 
 
 @dataclass(slots=True)
@@ -52,6 +46,7 @@ async def _summary_cut_for_target(
     target_tokens: int,
     max_tokens: int,
     max_count: int,
+    gateway: LLMGateway,
 ) -> int:
     """Tìm prefix cũ cần tóm tắt để suffix mới về gần ngân sách mục tiêu."""
     boundaries = [0, *_complete_turn_boundaries(messages)]
@@ -67,7 +62,7 @@ async def _summary_cut_for_target(
         remaining = messages[cut:]
         fits = (
             len(remaining) <= max_count
-            and await count_message_tokens(remaining) <= target_tokens
+            and await gateway.count_message_tokens(remaining) <= target_tokens
         )
         if fits:
             selected = cut
@@ -85,7 +80,7 @@ async def _summary_cut_for_target(
     if (
         latest_turn
         and len(latest_turn) <= max_count
-        and await count_message_tokens(latest_turn) <= max_tokens
+        and await gateway.count_message_tokens(latest_turn) <= max_tokens
     ):
         return latest_turn_start
 
@@ -97,31 +92,34 @@ async def prepare_memory(
     conversation_id: UUID,
     messages: list[Message],
     question: str,
+    gateway: LLMGateway,
 ) -> PreparedMemory:
     settings = get_settings()
-    system_tokens = await count_text_tokens(SYSTEM_PROMPT)
-    question_tokens = await count_text_tokens(question)
+    system_tokens = await gateway.count_text_tokens(SYSTEM_PROMPT)
+    question_tokens = await gateway.count_text_tokens(question)
     if system_tokens > settings.max_system_prompt_tokens:
-        raise GeminiServiceError("System Prompt vượt ngân sách token")
+        raise LLMError("INPUT_TOO_LARGE", "System Prompt vượt ngân sách token")
     if question_tokens > settings.max_user_input_tokens:
-        raise GeminiServiceError("Câu hỏi vượt ngân sách token")
+        raise LLMError("INPUT_TOO_LARGE", "Câu hỏi vượt ngân sách token")
 
     summary_row = await session.get(ConversationSummary, conversation_id)
     summary_text = summary_row.content if summary_row else ""
     summarized_count = summary_row.summarized_message_count if summary_row else 0
+    # Đóng transaction đọc trước mọi lời gọi provider; không giữ connection DB khi chờ Gemini.
+    await session.commit()
     recent = messages[summarized_count:]
     changed = False
 
     # Nén lại summary cũ nếu cấu hình token mới nhỏ hơn dữ liệu đã lưu.
     if (
         summary_text
-        and await count_text_tokens(summary_text)
+        and await gateway.count_text_tokens(summary_text, "summary")
         > settings.max_history_summary_tokens
     ):
-        summary_text = await generate_summary(summary_text, [])
+        summary_text = await gateway.generate_summary(summary_text, [])
         changed = True
 
-    recent_tokens = await count_message_tokens(recent)
+    recent_tokens = await gateway.count_message_tokens(recent)
     exceeds_count = len(recent) > settings.recent_message_limit
     exceeds_tokens = recent_tokens > settings.max_history_recent_messages_tokens
 
@@ -131,41 +129,43 @@ async def prepare_memory(
             settings.target_history_recent_messages_tokens,
             settings.max_history_recent_messages_tokens,
             settings.recent_message_limit,
+            gateway,
         )
-        summary_text = await generate_summary(summary_text, recent[:summarize_count])
-        if await count_text_tokens(summary_text) > settings.max_history_summary_tokens:
-            raise GeminiServiceError("Summary vượt ngân sách token")
+        summary_text = await gateway.generate_summary(summary_text, recent[:summarize_count])
+        if await gateway.count_text_tokens(summary_text, "summary") > settings.max_history_summary_tokens:
+            raise LLMError("INPUT_TOO_LARGE", "Summary vượt ngân sách token")
         summarized_count += summarize_count
         recent = recent[summarize_count:]
         changed = True
 
     if (
         summary_text
-        and await count_text_tokens(summary_text)
+        and await gateway.count_text_tokens(summary_text, "summary")
         > settings.max_history_summary_tokens
     ):
-        raise GeminiServiceError("Summary vượt ngân sách token")
+        raise LLMError("INPUT_TOO_LARGE", "Summary vượt ngân sách token")
 
     # Kiểm tra tổng input thực tế, gồm cả role và phần nhãn summary.
     context = build_context(summary_text or None, recent, question)
-    while await count_context_tokens(context) > settings.max_chat_input_tokens:
+    while await gateway.count_context_tokens(context) > settings.max_chat_input_tokens:
         if not recent:
-            raise GeminiServiceError("Không thể thu gọn context vào ngân sách input")
+            raise LLMError("INPUT_TOO_LARGE", "Không thể thu gọn context vào ngân sách input")
         # Nhánh dự phòng chỉ tóm tắt lượt hoàn chỉnh cũ nhất, không dùng batch cố định.
         summarize_count = _keep_complete_turn(recent, 1)
-        summary_text = await generate_summary(summary_text, recent[:summarize_count])
-        if await count_text_tokens(summary_text) > settings.max_history_summary_tokens:
-            raise GeminiServiceError("Summary vượt ngân sách token")
+        summary_text = await gateway.generate_summary(summary_text, recent[:summarize_count])
+        if await gateway.count_text_tokens(summary_text, "summary") > settings.max_history_summary_tokens:
+            raise LLMError("INPUT_TOO_LARGE", "Summary vượt ngân sách token")
         summarized_count += summarize_count
         recent = recent[summarize_count:]
         changed = True
         context = build_context(summary_text, recent, question)
 
     if changed:
-        if summary_row:
-            summary_row.content = summary_text
-            summary_row.summarized_message_count = summarized_count
-            summary_row.updated_at = utc_now()
+        current_summary = await session.get(ConversationSummary, conversation_id)
+        if current_summary:
+            current_summary.content = summary_text
+            current_summary.summarized_message_count = summarized_count
+            current_summary.updated_at = utc_now()
         else:
             session.add(
                 ConversationSummary(
@@ -174,5 +174,6 @@ async def prepare_memory(
                     summarized_message_count=summarized_count,
                 )
             )
+        await session.commit()
 
     return PreparedMemory(summary=summary_text or None, recent_messages=recent)

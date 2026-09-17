@@ -1,6 +1,7 @@
-# Chatbot Gemini v3
+# Chatbot Gemini v4.2
 
-Chatbot Next.js + FastAPI hỗ trợ nhiều tài khoản. Mỗi user chỉ truy cập được hội thoại và message của chính mình; bộ nhớ `Summary + Recent Messages` từ v2 được giữ nguyên.
+Chatbot Next.js + FastAPI hỗ trợ nhiều tài khoản, role admin, quota dùng chung,
+Redis queue và SSE; bộ nhớ `Summary + Recent Messages` từ v3 được giữ nguyên.
 
 ## Chạy
 
@@ -20,7 +21,14 @@ Nếu database v2 đã có hội thoại, đặt thêm `V2_OWNER_EMAIL` và `V2_
 uvicorn app.main:app --reload
 ```
 
-4. Chạy frontend ở terminal khác:
+4. Nếu bật async, chạy worker ở terminal riêng:
+
+```powershell
+cd backend
+python -m app.queue.worker
+```
+
+5. Chạy frontend ở terminal khác:
 
 ```powershell
 cd frontend

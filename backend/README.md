@@ -1,6 +1,6 @@
-# Chatbot v3 - Backend
+# Chatbot v4.2 - Backend
 
-FastAPI + PostgreSQL + Gemini, có JWT, mật khẩu Argon2 và dữ liệu hội thoại tách theo user.
+FastAPI + PostgreSQL + Redis Streams + Gemini Gateway, có role, quota và audit.
 
 ## Cài đặt
 
@@ -17,6 +17,18 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
+Worker async chạy bằng tiến trình riêng:
+
+```powershell
+python -m app.queue.worker
+```
+
+Gán admin đầu tiên bằng CLI có audit (không có API tự nâng quyền):
+
+```powershell
+python -m app.cli promote-admin admin@example.com --reason "Khởi tạo quản trị viên"
+```
+
 Với database v2 đang có hội thoại, migration không tự chọn chủ sở hữu. Đặt hai biến sau trước khi chạy:
 
 ```env
@@ -30,7 +42,9 @@ Tài khoản này được tạo trong migration và nhận toàn bộ hội tho
 
 - `POST /auth/register`: tạo tài khoản và trả access token.
 - `POST /auth/login`: đăng nhập.
-- `GET /users/me`: lấy user hiện tại.
-- `/conversations` và `/chat`: yêu cầu `Authorization: Bearer <token>`.
+- `GET /users/me`: lấy user hiện tại kèm role.
+- `POST /chat`: contract đồng bộ tương thích v3.
+- `POST /chat/jobs` và `/generations/*`: queue/status/SSE/cancel.
+- `/admin/*`: chỉ role=admin; setting thay đổi được ghi audit.
 
 Context Gemini vẫn theo v2: `System Prompt + Summary + Recent Messages + Current Question`, với ngân sách token cấu hình hoàn toàn qua ENV.

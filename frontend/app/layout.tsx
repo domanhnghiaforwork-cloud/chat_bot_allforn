@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin", "vietnamese"] });
 
 export const metadata: Metadata = {
   title: "Chatbot Gemini",
-  description: "Chatbot v3 có tài khoản và lịch sử hội thoại riêng",
+  description: "Chatbot v4.2 có quota, hàng đợi và quản trị vận hành",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

@@ -24,7 +24,7 @@ export default function LoginForm() {
         password: String(form.get("password")),
       });
       saveAuthSession(result.access_token, result.user);
-      router.replace("/");
+      router.replace(result.user.role === "admin" ? "/admin" : "/chat");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không thể đăng nhập");
     } finally {

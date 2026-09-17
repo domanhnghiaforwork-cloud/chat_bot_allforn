@@ -1,14 +1,27 @@
-from datetime import timedelta
+import asyncio
+import time
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.repository import conversations, messages
+from app.config.runtime import runtime_settings
+from app.db.repository import conversations
+from app.llm import LLMError, LLMGateway
+from app.llm.retry_policy import retry_delay
 from app.memory.context_builder import build_context
 from app.memory.history import load_history
 from app.memory.summary import prepare_memory
-from app.models import Conversation, Message, utc_now
-from app.services.gemini import generate_reply
+from app.models import Conversation, GenerationRequest, Message, utc_now
+from app.rate_limit.conversation_lock import conversation_lock
+from app.rate_limit.user_limiter import UserLimiter
+from app.routing.fallback import fallback_model
+from app.routing.model_router import route_model
+from app.services import generation as generation_service
+
+
+class UserRateLimited(RuntimeError):
+    def __init__(self, retry_after: int):
+        self.retry_after = retry_after
 
 
 async def create_conversation(session: AsyncSession, user_id: UUID) -> Conversation:
@@ -33,36 +46,90 @@ async def get_conversation(
 async def chat(
     session: AsyncSession, conversation_id: UUID, user_id: UUID, question: str
 ) -> tuple[str, Message, Message] | None:
-    # Lọc user_id ngay trong query để không lộ hoặc dùng nhầm hội thoại người khác.
-    conversation = await conversations.get_owned(session, conversation_id, user_id)
-    if not conversation:
+    settings = await runtime_settings()
+    if not settings.legacy_sync_chat_enabled:
+        raise LLMError("INTERNAL_ERROR", "Luồng chat đồng bộ đang tắt")
+
+    limit = await UserLimiter().consume(user_id, settings)
+    if not limit.allowed:
+        raise UserRateLimited(limit.retry_after_seconds)
+
+    request = await generation_service.create_sync_request(
+        session, user_id, conversation_id, question, settings
+    )
+    if not request:
         return None
 
-    history = await load_history(session, conversation_id)
-    memory = await prepare_memory(session, conversation_id, history, question)
-    # Summary phải được lưu trước khi recent bị thu gọn khỏi context.
-    await session.commit()
-    context = build_context(
-        memory.summary,
-        memory.recent_messages,
-        question,
-    )
-    answer = await generate_reply(context)
+    gateway = LLMGateway(request.id)
+    try:
+        async with conversation_lock(conversation_id, settings):
+            request.status = "GENERATING"
+            request.started_at = utc_now()
+            await session.commit()
 
-    created_at = utc_now()
-    user_message, assistant_message = await messages.add_pair(
-        session,
-        conversation_id,
-        question,
-        answer,
-        created_at,
-        created_at + timedelta(microseconds=1),
-    )
-    if not history:
-        conversation.title = question[:117] + ("..." if len(question) > 117 else "")
-    conversation.updated_at = utc_now()
-    await session.commit()
-    await session.refresh(user_message)
-    await session.refresh(assistant_message)
+            history = await load_history(session, conversation_id)
+            memory_attempt = 0
+            memory_started = time.monotonic()
+            while True:
+                memory_attempt += 1
+                try:
+                    memory = await prepare_memory(
+                        session, conversation_id, history, question, gateway
+                    )
+                    break
+                except LLMError as error:
+                    delay = retry_delay(error, memory_attempt, settings)
+                    elapsed = time.monotonic() - memory_started
+                    if (
+                        not error.retryable
+                        or memory_attempt >= settings.gemini_max_retry_attempts
+                        or elapsed + delay >= settings.gemini_max_retry_elapsed_seconds
+                    ):
+                        raise
+                    await asyncio.sleep(delay)
+            context = build_context(memory.summary, memory.recent_messages, question)
 
-    return answer, user_message, assistant_message
+            started = time.monotonic()
+            attempt = 0
+            model = route_model("chat", request.requested_model, settings)
+            while True:
+                attempt += 1
+                current = await session.get(GenerationRequest, request.id)
+                if current:
+                    current.attempt_count = attempt
+                    current.actual_model = model
+                    current.updated_at = utc_now()
+                    await session.commit()
+                try:
+                    result = await gateway.generate_once(
+                        context, requested_model=request.requested_model, model_override=model
+                    )
+                    break
+                except LLMError as error:
+                    elapsed = time.monotonic() - started
+                    delay = retry_delay(error, attempt, settings)
+                    fallback = fallback_model(model, "chat", settings)
+                    if (
+                        not error.retryable
+                        or attempt >= settings.gemini_max_retry_attempts
+                        or elapsed + delay >= settings.gemini_max_retry_elapsed_seconds
+                    ):
+                        raise
+                    if fallback:
+                        model = fallback
+                    await asyncio.sleep(delay)
+
+            pair = await generation_service.finalize_success(
+                session, request.id, result.text, result.model
+            )
+            if not pair:
+                raise LLMError("CANCELLED", "Yêu cầu đã bị hủy")
+            return result.text, pair[0], pair[1]
+    except Exception as exc:
+        error = exc if isinstance(exc, LLMError) else LLMError(
+            "INTERNAL_ERROR", "Không thể xử lý yêu cầu"
+        )
+        await generation_service.fail_request(
+            session, request.id, error.code, error.public_message
+        )
+        raise

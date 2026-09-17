@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -20,6 +21,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [authRevision, setAuthRevision] = useState(0);
   const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isAdminPage = pathname.startsWith("/admin");
 
   useEffect(() => {
     const refresh = () => setAuthRevision((value) => value + 1);
@@ -43,7 +45,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
         if (!active) return;
         setUser(currentUser);
         setChecking(false);
-        if (isAuthPage) router.replace("/");
+        if (isAuthPage) router.replace(currentUser.role === "admin" ? "/admin" : "/chat");
+        else if (isAdminPage && currentUser.role !== "admin") router.replace("/chat");
+        else if (pathname === "/") router.replace(currentUser.role === "admin" ? "/admin" : "/chat");
       })
       .catch(() => {
         if (!active) return;
@@ -55,12 +59,24 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [authRevision, isAuthPage, router]);
+  }, [authRevision, isAuthPage, pathname, router]);
 
   if (isAuthPage) {
     return <main className="auth-main">{checking ? <p>Đang kiểm tra...</p> : children}</main>;
   }
   if (checking || !user) return <main className="auth-main"><p>Đang kiểm tra phiên đăng nhập...</p></main>;
+  if (isAdminPage) {
+    if (user.role !== "admin") return <main className="auth-main"><p>Đang chuyển hướng...</p></main>;
+    return (
+      <div className="admin-shell">
+        <header className="admin-nav">
+          <strong>Quản trị v4.2</strong>
+          <nav><Link href="/chat">Chat</Link><span>{user.email}</span></nav>
+        </header>
+        <main className="admin-main">{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">

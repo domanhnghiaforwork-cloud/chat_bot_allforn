@@ -136,6 +136,25 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "http://frontend:3000"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    ports:
+      - "127.0.0.1:${NGROK_INSPECTOR_PORT:-4040}:4040"
+    depends_on:
+      frontend:
+        condition: service_started
+    profiles: ["tunnel"]
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   postgres-data:
   redis-data:

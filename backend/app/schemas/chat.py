@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.conversation import MessageResponse
 
@@ -10,6 +10,13 @@ class ChatRequest(BaseModel):
 
     conversation_id: UUID
     message: str = Field(min_length=1)
+
+    @field_validator("message")
+    @classmethod
+    def reject_local_command(cls, value: str) -> str:
+        if value.startswith("/"):
+            raise ValueError("Lệnh chat phải được xử lý cục bộ, không gửi tới model")
+        return value
 
 
 class ChatResponse(BaseModel):

@@ -44,6 +44,39 @@ docker compose logs --tail=100 backend worker frontend
 
 Kết quả readiness hợp lệ có `status=ready`, `postgres=true`, `redis=true`.
 
+### Public ứng dụng qua ngrok
+
+Authtoken ngrok được đặt trong file `.env` ở thư mục gốc và không được commit:
+
+```dotenv
+NGROK_AUTHTOKEN=replace_with_your_ngrok_authtoken
+NGROK_INSPECTOR_PORT=4040
+```
+
+Bật stack cùng public tunnel:
+
+```powershell
+docker compose --profile tunnel up -d
+docker compose logs --tail=100 ngrok
+```
+
+Xem URL HTTPS mà ngrok đã cấp:
+
+```powershell
+(Invoke-RestMethod http://127.0.0.1:4040/api/tunnels).tunnels |
+  Select-Object name, public_url
+```
+
+Ngrok truy cập frontend qua mạng nội bộ Compose tại `http://frontend:3000`; không cần
+`host.docker.internal` và không cần mở thêm cổng backend. Inspector chỉ bind tại
+`127.0.0.1:4040`, nên không public ra Internet.
+
+Dừng riêng tunnel nhưng giữ chatbot hoạt động:
+
+```powershell
+docker compose --profile tunnel stop ngrok
+```
+
 ## 3. Vận hành
 
 Xem log liên tục:

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 GenerationStatus = Literal[
@@ -17,6 +17,13 @@ class ChatJobRequest(BaseModel):
     message: str = Field(min_length=1)
     client_request_id: UUID
     model: Literal["default", "advanced"] = "default"
+
+    @field_validator("message")
+    @classmethod
+    def reject_local_command(cls, value: str) -> str:
+        if value.startswith("/"):
+            raise ValueError("Lệnh chat phải được xử lý cục bộ, không gửi tới model")
+        return value
 
 
 class GenerationResponse(BaseModel):

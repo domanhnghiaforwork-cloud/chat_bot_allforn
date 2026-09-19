@@ -119,7 +119,7 @@ async def update_settings_batch(
             )
             candidate[change.key] = value
             parsed.append((change.key, value, definition, change.reset))
-        validate_relations(candidate)
+        validate_relations(candidate, env.max_history_summary_ratio)
     except InvalidSetting as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -138,6 +138,7 @@ async def update_setting(
     admin: AdminUser,
     session: AsyncSession = Depends(get_session),
 ):
+    env = get_settings()
     definition = EDITABLE_SETTINGS.get(key)
     if not definition:
         raise HTTPException(status_code=404, detail="Cấu hình không thuộc allowlist")
@@ -145,7 +146,7 @@ async def update_setting(
         value = validate_value(definition, payload.value)
         candidate = await _locked_setting_values(session)
         candidate[key] = value
-        validate_relations(candidate)
+        validate_relations(candidate, env.max_history_summary_ratio)
     except InvalidSetting as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -170,7 +171,7 @@ async def reset_setting(
     try:
         candidate = await _locked_setting_values(session)
         candidate[key] = getattr(get_settings(), definition.attr)
-        validate_relations(candidate)
+        validate_relations(candidate, get_settings().max_history_summary_ratio)
     except InvalidSetting as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _persist_setting(

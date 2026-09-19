@@ -4,7 +4,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.prompts import SYSTEM_PROMPT
-from app.config.settings import get_settings
+from app.config.settings import Settings
+from app.llm.generation import estimate_tokens
 from app.models import ConversationSummary, Message, utc_now
 from app.memory.context_builder import build_context
 from app.llm import LLMError, LLMGateway
@@ -14,6 +15,11 @@ from app.llm import LLMError, LLMGateway
 class PreparedMemory:
     summary: str | None
     recent_messages: list[Message]
+
+
+def estimate_conversation_tokens(messages: list[Message]) -> int:
+    """Ước lượng tổng token nội dung gốc đã lưu của một cuộc hội thoại."""
+    return sum(estimate_tokens(message.content) for message in messages)
 
 
 def _keep_complete_turn(messages: list[Message], count: int) -> int:
@@ -93,8 +99,8 @@ async def prepare_memory(
     messages: list[Message],
     question: str,
     gateway: LLMGateway,
+    settings: Settings,
 ) -> PreparedMemory:
-    settings = get_settings()
     system_tokens = await gateway.measure_text_tokens(
         SYSTEM_PROMPT, settings.max_system_prompt_tokens
     )
@@ -105,6 +111,20 @@ async def prepare_memory(
         raise LLMError("INPUT_TOO_LARGE", "System Prompt vượt ngân sách token")
     if question_tokens > settings.max_user_input_tokens:
         raise LLMError("INPUT_TOO_LARGE", "Câu hỏi vượt ngân sách token")
+
+    # Giới hạn tính trên transcript gốc trong DB, không cộng system prompt hoặc
+    # summary vì chúng chỉ là dữ liệu dẫn xuất để dựng context. Dành trước toàn
+    # bộ output budget để mọi lượt đã nhận đều có thể trả lời trọn vẹn.
+    projected_conversation_tokens = (
+        estimate_conversation_tokens(messages)
+        + question_tokens
+        + settings.max_chat_output_tokens
+    )
+    if projected_conversation_tokens > settings.max_conversation_tokens:
+        raise LLMError(
+            "CONVERSATION_TOKEN_LIMIT",
+            "Hội thoại đã đạt giới hạn token. Hãy tạo cuộc trò chuyện mới.",
+        )
 
     summary_row = await session.get(ConversationSummary, conversation_id)
     summary_text = summary_row.content if summary_row else ""

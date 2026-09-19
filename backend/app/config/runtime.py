@@ -46,7 +46,7 @@ async def effective_settings() -> tuple[Settings, list[EffectiveSetting]]:
                 definition.choices,
             )
         )
-    validate_relations(values)
+    validate_relations(values, env.max_history_summary_ratio)
     # model_copy giữ nguyên secret/URL từ ENV và chỉ thay allowlist vận hành.
     runtime = Settings.model_validate(
         {

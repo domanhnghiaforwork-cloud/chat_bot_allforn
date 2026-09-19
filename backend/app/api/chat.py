@@ -46,7 +46,11 @@ async def chat(
     except LLMError as exc:
         status_code = (
             status.HTTP_422_UNPROCESSABLE_ENTITY
-            if exc.code in {"INPUT_TOO_LARGE", "SAFETY_BLOCKED"}
+            if exc.code in {
+                "INPUT_TOO_LARGE",
+                "CONVERSATION_TOKEN_LIMIT",
+                "SAFETY_BLOCKED",
+            }
             else status.HTTP_503_SERVICE_UNAVAILABLE
         )
         raise HTTPException(

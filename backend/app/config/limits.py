@@ -39,6 +39,9 @@ def _item(
 EDITABLE_SETTINGS = {
     item.key: item
     for item in (
+        _item("CHAT_CONTEXT_WINDOW_TOKENS", "integer", "Token Limits", 100),
+        _item("SUMMARY_CONTEXT_WINDOW_TOKENS", "integer", "Token Limits", 100),
+        _item("MAX_CONVERSATION_TOKENS", "integer", "Token Limits", 1),
         _item("DEFAULT_MODEL_NAME", "string", "Model/Quota", choices=MODEL_CHOICES),
         _item("SUMMARY_MODEL_NAME", "string", "Model/Quota", choices=MODEL_CHOICES),
         _item("ADVANCED_MODEL_NAME", "string", "Model/Quota", choices=MODEL_CHOICES),
@@ -108,7 +111,22 @@ def validate_value(definition: EditableSetting, value: Any) -> Any:
     return parsed.strip() if isinstance(parsed, str) else parsed
 
 
-def validate_relations(values: dict[str, Any]) -> None:
+def validate_relations(
+    values: dict[str, Any], max_history_summary_ratio: float
+) -> None:
+    chat_context = values["CHAT_CONTEXT_WINDOW_TOKENS"]
+    summary_context = values["SUMMARY_CONTEXT_WINDOW_TOKENS"]
+    max_conversation = values["MAX_CONVERSATION_TOKENS"]
+    summary_output = int(chat_context * max_history_summary_ratio)
+    if summary_context <= summary_output:
+        raise InvalidSetting(
+            "Summary context window phải lớn hơn ngân sách output summary"
+        )
+    if max_conversation < chat_context:
+        raise InvalidSetting(
+            "Max token cuộc hội thoại phải lớn hơn hoặc bằng chat context window"
+        )
+
     initial = values["GEMINI_RETRY_INITIAL_DELAY_SECONDS"]
     maximum = values["GEMINI_RETRY_MAX_DELAY_SECONDS"]
     elapsed = values["GEMINI_MAX_RETRY_ELAPSED_SECONDS"]

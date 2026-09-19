@@ -196,6 +196,7 @@ main {
 .typing span:nth-child(3) { animation-delay: .3s; }
 
 .message-form {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 10px;
@@ -220,6 +221,45 @@ main {
 .message-form button { min-height: 46px; padding: 0 18px; color: #fff; background: var(--primary); border: 0; border-radius: 12px; cursor: pointer; font-weight: 600; }
 .message-form button:hover:not(:disabled) { background: var(--primary-dark); }
 .message-form button:disabled { cursor: not-allowed; opacity: .55; }
+
+.slash-command-menu {
+  position: absolute;
+  right: 16px;
+  bottom: calc(100% - 8px);
+  left: 16px;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgb(16 24 40 / 16%);
+}
+
+.message-form .slash-command-menu button {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 0;
+  padding: 10px 12px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font-weight: 400;
+}
+
+.message-form .slash-command-menu button:hover,
+.message-form .slash-command-menu button.active {
+  color: var(--text);
+  background: #eef2ff;
+}
+
+.slash-command-menu code { color: var(--primary); font-weight: 700; }
+.slash-command-menu span { color: var(--muted); font-size: .86rem; }
 
 .generation-status {
   display: flex;

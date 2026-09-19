@@ -137,6 +137,7 @@ async def process_job(message_id: str, request_id: UUID) -> None:
                     history,
                     request.question,
                     gateway,
+                    settings,
                 )
             context = build_context(memory.summary, memory.recent_messages, request.question)
 

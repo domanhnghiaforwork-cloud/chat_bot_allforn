@@ -24,6 +24,10 @@ class ApiSmokeTest(unittest.IsolatedAsyncioTestCase):
     async def test_live_and_protected_routes(self) -> None:
         live = await self.client.get("/health/live")
         self.assertEqual(live.status_code, 200)
+        self.assertIn(
+            "/conversations/{conversation_id}/token-usage",
+            (await self.client.get("/openapi.json")).json()["paths"],
+        )
         self.assertEqual((await self.client.get("/users/me")).status_code, 401)
         self.assertEqual((await self.client.get("/admin/settings")).status_code, 401)
         auth_fields = (await self.client.get("/openapi.json")).json()["components"][
@@ -62,6 +66,14 @@ class ApiSmokeTest(unittest.IsolatedAsyncioTestCase):
         try:
             admin_settings = await self.client.get("/admin/settings")
             self.assertEqual(admin_settings.status_code, 200)
+            self.assertEqual(
+                [item["key"] for item in admin_settings.json()["settings"][:3]],
+                [
+                    "CHAT_CONTEXT_WINDOW_TOKENS",
+                    "SUMMARY_CONTEXT_WINDOW_TOKENS",
+                    "MAX_CONVERSATION_TOKENS",
+                ],
+            )
             self.assertTrue(
                 all(isinstance(value, bool) for value in admin_settings.json()["secrets"].values())
             )

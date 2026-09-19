@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     chat_context_window_tokens: int = Field(gt=0)
     summary_context_window_tokens: int = Field(gt=0)
+    max_conversation_tokens: int = Field(gt=0)
     max_input_ratio: float = Field(gt=0, le=1)
     max_system_prompt_ratio: float = Field(gt=0, le=1)
     max_user_input_ratio: float = Field(gt=0, le=1)
@@ -99,6 +100,11 @@ class Settings(BaseSettings):
         if self.max_history_summary_tokens >= self.summary_context_window_tokens:
             raise ValueError(
                 "SUMMARY_CONTEXT_WINDOW_TOKENS phải lớn hơn ngân sách output summary"
+            )
+        if self.max_conversation_tokens < self.chat_context_window_tokens:
+            raise ValueError(
+                "MAX_CONVERSATION_TOKENS phải lớn hơn hoặc bằng "
+                "CHAT_CONTEXT_WINDOW_TOKENS"
             )
         if self.async_chat_enabled and not self.queue_enabled:
             raise ValueError("ASYNC_CHAT_ENABLED yêu cầu QUEUE_ENABLED=true")

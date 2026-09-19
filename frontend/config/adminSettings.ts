@@ -5,6 +5,7 @@ export interface SettingPresentation {
 }
 
 export const GROUP_TITLES: Record<string, string> = {
+  "Token Limits": "Giới hạn token",
   "Model/Quota": "Mô hình AI và hạn mức",
   "Rate Limit": "Giới hạn theo người dùng",
   Queue: "Hàng đợi và worker",
@@ -19,6 +20,21 @@ export const SECRET_TITLES: Record<string, string> = {
 };
 
 export const SETTING_PRESENTATION: Record<string, SettingPresentation> = {
+  CHAT_CONTEXT_WINDOW_TOKENS: {
+    title: "Context window của chat",
+    description: "Tổng ngân sách token cho input và output của mỗi lượt chat.",
+    unit: "token",
+  },
+  SUMMARY_CONTEXT_WINDOW_TOKENS: {
+    title: "Context window của summary",
+    description: "Tổng ngân sách token cho input và output của mỗi lượt tóm tắt lịch sử.",
+    unit: "token",
+  },
+  MAX_CONVERSATION_TOKENS: {
+    title: "Token tối đa của một cuộc hội thoại",
+    description: "Tổng token ước lượng của nội dung user và assistant; khi chạm trần, người dùng phải tạo cuộc trò chuyện mới.",
+    unit: "token",
+  },
   DEFAULT_MODEL_NAME: {
     title: "Model trả lời mặc định",
     description: "Model dùng cho các cuộc trò chuyện thông thường.",

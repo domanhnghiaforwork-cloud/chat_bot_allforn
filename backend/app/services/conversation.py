@@ -10,7 +10,7 @@ from app.llm import LLMError, LLMGateway
 from app.llm.retry_policy import retry_delay
 from app.memory.context_builder import build_context
 from app.memory.history import load_history
-from app.memory.summary import prepare_memory
+from app.memory.summary import estimate_conversation_tokens, prepare_memory
 from app.models import Conversation, GenerationRequest, Message, utc_now
 from app.rate_limit.conversation_lock import conversation_lock
 from app.rate_limit.user_limiter import UserLimiter
@@ -41,6 +41,32 @@ async def get_conversation(
     return await conversations.get_owned(
         session, conversation_id, user_id, with_messages=True
     )
+
+
+async def get_conversation_token_usage(
+    session: AsyncSession, conversation_id: UUID, user_id: UUID
+) -> dict[str, int | float | bool] | None:
+    conversation = await conversations.get_owned(
+        session, conversation_id, user_id, with_messages=True
+    )
+    if not conversation:
+        return None
+
+    settings = await runtime_settings()
+    current_tokens = estimate_conversation_tokens(conversation.messages)
+    remaining_tokens = max(0, settings.max_conversation_tokens - current_tokens)
+    return {
+        "current_tokens": current_tokens,
+        "max_conversation_tokens": settings.max_conversation_tokens,
+        "remaining_tokens": remaining_tokens,
+        "utilization_percent": round(
+            current_tokens / settings.max_conversation_tokens * 100, 1
+        ),
+        "chat_context_window_tokens": settings.chat_context_window_tokens,
+        "max_chat_input_tokens": settings.max_chat_input_tokens,
+        "max_chat_output_tokens": settings.max_chat_output_tokens,
+        "estimated": True,
+    }
 
 
 async def chat(
@@ -74,7 +100,7 @@ async def chat(
                 memory_attempt += 1
                 try:
                     memory = await prepare_memory(
-                        session, conversation_id, history, question, gateway
+                        session, conversation_id, history, question, gateway, settings
                     )
                     break
                 except LLMError as error:

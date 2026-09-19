@@ -10,3 +10,14 @@ export interface Conversation {
 export interface ConversationDetail extends Conversation {
   messages: Message[];
 }
+
+export interface ConversationTokenUsage {
+  current_tokens: number;
+  max_conversation_tokens: number;
+  remaining_tokens: number;
+  utilization_percent: number;
+  chat_context_window_tokens: number;
+  max_chat_input_tokens: number;
+  max_chat_output_tokens: number;
+  estimated: boolean;
+}

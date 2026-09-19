@@ -1,6 +1,7 @@
 import asyncio
-import os
 import logging
+import os
+import socket
 from contextlib import suppress
 from datetime import timedelta
 from uuid import UUID
@@ -284,7 +285,9 @@ async def scheduler() -> None:
 async def worker() -> None:
     queue = QueueManager()
     await queue.ensure_group()
-    consumer = f"worker-{os.getpid()}"
+    # PID có thể trùng giữa các container; hostname giữ consumer Redis duy nhất
+    # khi worker được scale ngang bằng Docker Compose.
+    consumer = f"worker-{socket.gethostname()}-{os.getpid()}"
     semaphore = asyncio.Semaphore((await runtime_settings()).worker_concurrency)
 
     async def run(message_id: str, request_id: str) -> None:

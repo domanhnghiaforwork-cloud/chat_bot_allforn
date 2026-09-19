@@ -4,6 +4,7 @@ const backendUrl = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  output: "standalone",
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${backendUrl}/:path*` }];
   },

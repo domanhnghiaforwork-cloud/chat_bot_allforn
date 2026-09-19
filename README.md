@@ -1,5 +1,10 @@
 # Chatbot Gemini v4.2
 
+## Docker production
+
+Xem [DOCKER.md](./DOCKER.md) để build và chạy toàn bộ frontend, backend, worker,
+PostgreSQL và Redis bằng Docker Compose.
+
 Chatbot Next.js + FastAPI hỗ trợ nhiều tài khoản, role admin, quota dùng chung,
 Redis queue và SSE; bộ nhớ `Summary + Recent Messages` từ v3 được giữ nguyên.
 

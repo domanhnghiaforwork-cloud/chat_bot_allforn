@@ -7,9 +7,11 @@ from sqlalchemy import text
 from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
+from app.api.configuration import router as configuration_router
 from app.api.conversations import router as conversations_router
 from app.api.generations import router as generations_router
 from app.api.users import router as users_router
+from app.config.settings import get_settings
 from app.db.database import engine
 from app.redis_client import close_redis_clients, redis_ready
 
@@ -21,7 +23,9 @@ async def lifespan(_: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title="Chatbot v4.2", lifespan=lifespan)
+settings = get_settings()
+app = FastAPI(title=f"Chatbot {settings.name_chatbot}", lifespan=lifespan)
+app.include_router(configuration_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(chat_router)

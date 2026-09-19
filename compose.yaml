@@ -121,6 +121,7 @@ services:
         BACKEND_URL: http://backend:8000
         NEXT_PUBLIC_ASYNC_CHAT_ENABLED: ${ASYNC_CHAT_ENABLED:-true}
     environment:
+      BACKEND_URL: http://backend:8000
       HOSTNAME: 0.0.0.0
       PORT: 3000
     ports:

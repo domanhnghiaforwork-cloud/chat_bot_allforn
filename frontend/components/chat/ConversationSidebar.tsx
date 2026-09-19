@@ -8,9 +8,11 @@ import { listConversations } from "../../services/conversationApi";
 import { clearAuthSession } from "../../stores/authStore";
 import type { User } from "../../types/auth";
 import type { Conversation } from "../../types/conversation";
+import { useChatbotName } from "../branding/BrandProvider";
 import NewChatButton from "./NewChatButton";
 
 export default function ConversationSidebar({ user }: { user: User }) {
+  const chatbotName = useChatbotName();
   const pathname = usePathname();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -38,6 +40,15 @@ export default function ConversationSidebar({ user }: { user: User }) {
 
   return (
     <aside className="conversation-sidebar">
+      <Link className="sidebar-brand" href="/chat" aria-label={`Mở Chatbot ${chatbotName}`}>
+        <span className="sidebar-brand-mark" aria-hidden="true" title={chatbotName}>
+          {chatbotName}
+        </span>
+        <span>
+          <strong>Chatbot {chatbotName}</strong>
+          <small>Trợ lý AI</small>
+        </span>
+      </Link>
       <div className="sidebar-user">
         <span title={user.email}>{user.email}</span>
         <button type="button" onClick={logout}>Đăng xuất</button>

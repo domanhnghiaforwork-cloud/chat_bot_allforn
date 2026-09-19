@@ -7,8 +7,10 @@ import type { FormEvent } from "react";
 
 import { login } from "../../services/authApi";
 import { saveAuthSession } from "../../stores/authStore";
+import { useChatbotName } from "../branding/BrandProvider";
 
 export default function LoginForm() {
+  const chatbotName = useChatbotName();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -36,7 +38,7 @@ export default function LoginForm() {
     <form className="auth-card" onSubmit={handleSubmit}>
       <div>
         <h1>Đăng nhập</h1>
-        <p>Tiếp tục các cuộc trò chuyện của bạn.</p>
+        <p>Tiếp tục các cuộc trò chuyện với Chatbot {chatbotName}.</p>
       </div>
       <label>
         Email

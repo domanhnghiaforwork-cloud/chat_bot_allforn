@@ -7,8 +7,10 @@ import type { FormEvent } from "react";
 
 import { register } from "../../services/authApi";
 import { saveAuthSession } from "../../stores/authStore";
+import { useChatbotName } from "../branding/BrandProvider";
 
 export default function RegisterForm() {
+  const chatbotName = useChatbotName();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -37,7 +39,7 @@ export default function RegisterForm() {
     <form className="auth-card" onSubmit={handleSubmit}>
       <div>
         <h1>Tạo tài khoản</h1>
-        <p>Mỗi tài khoản có lịch sử hội thoại riêng.</p>
+        <p>Tạo tài khoản để trò chuyện với Chatbot {chatbotName}.</p>
       </div>
       <label>
         Email

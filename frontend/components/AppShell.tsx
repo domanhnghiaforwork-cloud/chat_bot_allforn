@@ -12,9 +12,11 @@ import {
   getAuthSession,
 } from "../stores/authStore";
 import type { User } from "../types/auth";
+import { useChatbotName } from "./branding/BrandProvider";
 import ConversationSidebar from "./chat/ConversationSidebar";
 
 export default function AppShell({ children }: { children: ReactNode }) {
+  const chatbotName = useChatbotName();
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -70,7 +72,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="admin-shell">
         <header className="admin-nav">
-          <strong>Quản trị v4.2</strong>
+          <strong>Quản trị Chatbot {chatbotName}</strong>
           <nav><Link href="/chat">Chat</Link><span>{user.email}</span></nav>
         </header>
         <main className="admin-main">{children}</main>

@@ -2,7 +2,7 @@ from functools import lru_cache
 from math import isclose
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.config.model_catalog import SUPPORTED_MODEL_IDS
@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Không đặt giá trị mặc định: toàn bộ cấu hình phải đến từ ENV.
     gemini_api_key: str
     gemini_model: str
+    name_chatbot: str = Field(default="OLP AI", min_length=1, max_length=80)
     database_url: str
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: Literal["HS256", "HS384", "HS512"]
@@ -76,6 +77,14 @@ class Settings(BaseSettings):
     fallback_enabled: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("name_chatbot")
+    @classmethod
+    def validate_name_chatbot(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("NAME_CHATBOT không được để trống")
+        return name
 
     @model_validator(mode="after")
     def validate_token_ratios(self) -> "Settings":

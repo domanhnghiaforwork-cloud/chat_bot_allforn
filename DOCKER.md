@@ -16,8 +16,9 @@ Sửa hai file vừa tạo:
 
 - `.env`: đổi `POSTGRES_PASSWORD` thành chuỗi dài, ngẫu nhiên, URL-safe. Điều
   chỉnh `APP_PORT` và `API_WORKERS` nếu cần.
-- `backend/.env`: đặt `GEMINI_API_KEY`, tạo `JWT_SECRET_KEY` tối thiểu 32 ký tự,
-  kiểm tra model và quota thực tế. `DATABASE_URL` và `REDIS_URL` trong file này
+- `backend/.env`: đặt `GEMINI_API_KEY`, đổi `NAME_CHATBOT` nếu muốn, tạo
+  `JWT_SECRET_KEY` tối thiểu 32 ký tự, kiểm tra model và quota thực tế.
+  `DATABASE_URL` và `REDIS_URL` trong file này
   được Compose tự ghi đè bằng địa chỉ nội bộ container.
 - Không commit hai file `.env`; chúng đã được ignore và không được copy vào image.
 

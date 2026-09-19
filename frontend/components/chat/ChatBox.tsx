@@ -11,6 +11,7 @@ import {
 } from "../../services/conversationApi";
 import type { ConversationTokenUsage } from "../../types/conversation";
 import type { Message } from "../../types/chat";
+import { useChatbotName } from "../branding/BrandProvider";
 import GenerationStatus from "../status/GenerationStatus";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
@@ -38,6 +39,7 @@ function commandResponse(
 }
 
 export default function ChatBox({ conversationId }: { conversationId: string }) {
+  const chatbotName = useChatbotName();
   const [title, setTitle] = useState("Đang tải...");
   const [messages, setMessages] = useState<Message[]>([]);
   const [commandMessages, setCommandMessages] = useState<Message[]>([]);
@@ -190,7 +192,7 @@ export default function ChatBox({ conversationId }: { conversationId: string }) 
         <div className="chat-avatar" aria-hidden="true">AI</div>
         <div>
           <h1>{title}</h1>
-          <p>V4.2 · {ASYNC_ENABLED ? "Hàng đợi an toàn" : "Luồng đồng bộ tương thích"}</p>
+          <p>Chatbot {chatbotName} · V4.2 · {ASYNC_ENABLED ? "Hàng đợi an toàn" : "Luồng đồng bộ tương thích"}</p>
         </div>
       </header>
       {loadError ? (

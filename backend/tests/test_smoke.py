@@ -24,6 +24,9 @@ class ApiSmokeTest(unittest.IsolatedAsyncioTestCase):
     async def test_live_and_protected_routes(self) -> None:
         live = await self.client.get("/health/live")
         self.assertEqual(live.status_code, 200)
+        public_config = await self.client.get("/config")
+        self.assertEqual(public_config.status_code, 200)
+        self.assertEqual(public_config.json(), {"name_chatbot": "OLP AI"})
         self.assertIn(
             "/conversations/{conversation_id}/token-usage",
             (await self.client.get("/openapi.json")).json()["paths"],

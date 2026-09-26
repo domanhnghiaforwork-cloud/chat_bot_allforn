@@ -12,11 +12,14 @@ export interface EditableSetting {
 }
 
 export interface SettingsResponse {
+  provider: AdminOverview["provider"];
+  models: AdminOverview["models"];
   settings: EditableSetting[];
   secrets: Record<string, boolean>;
 }
 
 export interface AdminOverview {
+  provider: "gemini" | "openai";
   queue_depth: number | null;
   generation_statuses: Record<string, number>;
   usage_24h: { input_tokens: number; output_tokens: number; attempts: number };

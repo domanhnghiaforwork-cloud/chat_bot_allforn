@@ -39,9 +39,9 @@ def _item(
 EDITABLE_SETTINGS = {
     item.key: item
     for item in (
+        _item("MAX_CONVERSATION_TOKENS", "integer", "Token Limits", 100),
         _item("CHAT_CONTEXT_WINDOW_TOKENS", "integer", "Token Limits", 100),
         _item("SUMMARY_CONTEXT_WINDOW_TOKENS", "integer", "Token Limits", 100),
-        _item("MAX_CONVERSATION_TOKENS", "integer", "Token Limits", 1),
         _item("DEFAULT_MODEL_NAME", "string", "Model/Quota", choices=MODEL_CHOICES),
         _item("SUMMARY_MODEL_NAME", "string", "Model/Quota", choices=MODEL_CHOICES),
         _item("ADVANCED_MODEL_NAME", "string", "Model/Quota", choices=MODEL_CHOICES),
@@ -109,6 +109,17 @@ def validate_value(definition: EditableSetting, value: Any) -> Any:
     if definition.maximum is not None and parsed > definition.maximum:
         raise InvalidSetting(f"{definition.key} phải <= {definition.maximum}")
     return parsed.strip() if isinstance(parsed, str) else parsed
+
+
+def adjust_chat_context(values: dict[str, Any]) -> bool:
+    """Giữ context chat trong trần hội thoại trước khi kiểm tra/lưu cấu hình."""
+    maximum = values["MAX_CONVERSATION_TOKENS"]
+    if values["CHAT_CONTEXT_WINDOW_TOKENS"] <= maximum:
+        return False
+    values["CHAT_CONTEXT_WINDOW_TOKENS"] = validate_value(
+        EDITABLE_SETTINGS["CHAT_CONTEXT_WINDOW_TOKENS"], maximum
+    )
+    return True
 
 
 def validate_relations(

@@ -72,9 +72,9 @@ class ApiSmokeTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 [item["key"] for item in admin_settings.json()["settings"][:3]],
                 [
+                    "MAX_CONVERSATION_TOKENS",
                     "CHAT_CONTEXT_WINDOW_TOKENS",
                     "SUMMARY_CONTEXT_WINDOW_TOKENS",
-                    "MAX_CONVERSATION_TOKENS",
                 ],
             )
             self.assertTrue(

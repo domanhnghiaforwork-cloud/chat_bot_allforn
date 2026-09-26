@@ -3,17 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  ADMIN_TOKEN_SETTING_KEYS,
   GROUP_TITLES,
   SECRET_TITLES,
   settingPresentation,
 } from "../../config/adminSettings";
+import { adjustTokenDrafts, type TokenDraftState } from "../../config/adminTokenLimits";
 import {
   getAdminOverview,
   getAdminSettings,
-  getAuditLogs,
   updateAdminSettings,
 } from "../../services/adminApi";
-import type { AdminOverview, AuditLog, EditableSetting } from "../../types/admin";
+import type { AdminOverview, EditableSetting, SettingsResponse } from "../../types/admin";
 
 function parseValue(setting: EditableSetting, raw: string | boolean): unknown {
   if (setting.value_type === "boolean") return Boolean(raw);
@@ -33,24 +34,28 @@ function isChanged(setting: EditableSetting, draft: string | boolean): boolean {
 export default function AdminDashboard() {
   const [settings, setSettings] = useState<EditableSetting[]>([]);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [modelConfiguration, setModelConfiguration] = useState<Pick<SettingsResponse, "provider" | "models"> | null>(null);
   const [secrets, setSecrets] = useState<Record<string, boolean>>({});
-  const [drafts, setDrafts] = useState<Record<string, string | boolean>>({});
-  const [pendingResets, setPendingResets] = useState<Record<string, boolean>>({});
+  const [{ drafts, pendingResets }, setDraftState] = useState<TokenDraftState>({ drafts: {}, pendingResets: {} });
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [settingsResult, overviewResult, logResult] = await Promise.all([
-      getAdminSettings(), getAdminOverview(), getAuditLogs(),
+    const [settingsResult, overviewResult] = await Promise.all([
+      getAdminSettings(), getAdminOverview(),
     ]);
-    setSettings(settingsResult.settings);
+    const tokenSettings = ADMIN_TOKEN_SETTING_KEYS.flatMap((key) =>
+      settingsResult.settings.filter((item) => item.key === key),
+    );
+    setSettings(tokenSettings);
     setOverview(overviewResult);
-    setLogs(logResult);
+    setModelConfiguration({ provider: settingsResult.provider, models: settingsResult.models });
     setSecrets(settingsResult.secrets);
-    setDrafts(Object.fromEntries(settingsResult.settings.map((item) => [item.key, draftValue(item, item.value)])));
-    setPendingResets({});
+    setDraftState({
+      drafts: Object.fromEntries(tokenSettings.map((item) => [item.key, draftValue(item, item.value)])),
+      pendingResets: {},
+    });
   }, []);
 
   useEffect(() => {
@@ -62,21 +67,31 @@ export default function AdminDashboard() {
   );
 
   async function saveAll() {
-    if (!dirtySettings.length || saving) return;
+    if (saving) return;
+    const adjusted = adjustTokenDrafts({ drafts, pendingResets });
+    const changes = settings.filter((setting) => adjusted.pendingResets[setting.key] || isChanged(setting, adjusted.drafts[setting.key]));
+    setDraftState(adjusted);
+    if (!changes.length) return;
+    for (const setting of changes) {
+      const value = Number(adjusted.drafts[setting.key]);
+      if (!Number.isSafeInteger(value) || (setting.minimum !== null && value < setting.minimum)) {
+        return setMessage(`${settingPresentation(setting.key).title} phải là số nguyên từ ${setting.minimum ?? 1} trở lên.`);
+      }
+    }
     if (reason.trim().length < 3) return setMessage("Hãy nhập lý do thay đổi (tối thiểu 3 ký tự).");
-    if (!window.confirm(`Lưu ${dirtySettings.length} thay đổi cấu hình?`)) return;
+    if (!window.confirm(`Lưu ${changes.length} thay đổi cấu hình?`)) return;
     setSaving(true);
     try {
       await updateAdminSettings(
-        dirtySettings.map((setting) => pendingResets[setting.key]
+        changes.map((setting) => adjusted.pendingResets[setting.key]
           ? { key: setting.key, reset: true }
-          : { key: setting.key, value: parseValue(setting, drafts[setting.key]) }),
+          : { key: setting.key, value: parseValue(setting, adjusted.drafts[setting.key]) }),
         reason.trim(),
       );
-      const needsRestart = dirtySettings.some((setting) => setting.requires_restart);
+      const needsRestart = changes.some((setting) => setting.requires_restart);
       setReason("");
       setMessage(
-        `Đã lưu ${dirtySettings.length} thay đổi.${needsRestart ? " Cần khởi động lại worker để áp dụng đầy đủ." : ""}`,
+        `Đã lưu ${changes.length} thay đổi.${needsRestart ? " Cần khởi động lại worker để áp dụng đầy đủ." : ""}`,
       );
       await load();
     } catch (error) {
@@ -87,20 +102,20 @@ export default function AdminDashboard() {
   }
 
   function changeDraft(setting: EditableSetting, value: string | boolean) {
-    setDrafts((current) => ({ ...current, [setting.key]: value }));
-    setPendingResets((current) => ({ ...current, [setting.key]: false }));
+    setDraftState((current) => ({
+      drafts: { ...current.drafts, [setting.key]: value },
+      pendingResets: { ...current.pendingResets, [setting.key]: false },
+    }));
   }
 
   function toggleReset(setting: EditableSetting) {
-    const isPending = Boolean(pendingResets[setting.key]);
-    setDrafts((current) => ({
-      ...current,
-      [setting.key]: draftValue(setting, isPending ? setting.value : setting.default),
-    }));
-    setPendingResets((current) => ({
-      ...current,
-      [setting.key]: !isPending && setting.source === "override",
-    }));
+    setDraftState((current) => {
+      const isPending = Boolean(current.pendingResets[setting.key]);
+      return adjustTokenDrafts({
+        drafts: { ...current.drafts, [setting.key]: draftValue(setting, isPending ? setting.value : setting.default) },
+        pendingResets: { ...current.pendingResets, [setting.key]: !isPending && setting.source === "override" },
+      });
+    });
   }
 
   const groups = settings.reduce<Record<string, EditableSetting[]>>((result, item) => {
@@ -109,7 +124,7 @@ export default function AdminDashboard() {
   }, {});
   return (
     <section className="admin-dashboard">
-      <header><h1>Vận hành hệ thống</h1><p>Theo dõi tải và điều chỉnh cấu hình chatbot.</p></header>
+      <header><h1>Vận hành hệ thống</h1><p>Theo dõi tải và điều chỉnh 3 giới hạn token của chatbot.</p></header>
       <div className="overview-grid">
         <article><span>Job đang hoạt động</span><strong>{overview?.queue_depth ?? "N/A"}</strong></article>
         <article><span>Yêu cầu thất bại</span><strong>{overview?.generation_statuses.FAILED ?? 0}</strong></article>
@@ -118,9 +133,10 @@ export default function AdminDashboard() {
         <article><span>Token đầu vào trong 24 giờ</span><strong>{overview?.usage_24h.input_tokens ?? 0}</strong></article>
         <article><span>Token đầu ra trong 24 giờ</span><strong>{overview?.usage_24h.output_tokens ?? 0}</strong></article>
       </div>
-      {overview && (
+      {modelConfiguration && (
         <p className="model-summary">
-          Model mặc định: <strong>{overview.models.default}</strong> · Tóm tắt: <strong>{overview.models.summary}</strong> · Nâng cao: <strong>{overview.models.advanced}</strong>
+          Nguồn AI: <strong>{modelConfiguration.provider === "openai" ? "OpenAI" : "Gemini"}</strong> · {" "}
+          Model mặc định: <strong>{modelConfiguration.models.default}</strong> · Tóm tắt: <strong>{modelConfiguration.models.summary}</strong> · Nâng cao: <strong>{modelConfiguration.models.advanced}</strong>
         </p>
       )}
 
@@ -136,7 +152,7 @@ export default function AdminDashboard() {
       <div className={`change-toolbar${dirtySettings.length ? " has-changes" : ""}`}>
         <label className="reason-field">
           Lý do thay đổi
-          <input value={reason} onChange={(event) => setReason(event.currentTarget.value)} placeholder="Ví dụ: điều chỉnh theo quota AI Studio" />
+          <input value={reason} onChange={(event) => setReason(event.currentTarget.value)} placeholder="Ví dụ: điều chỉnh giới hạn token cuộc hội thoại" />
         </label>
         <div className="save-actions">
           <span>{dirtySettings.length ? `${dirtySettings.length} mục chưa lưu` : "Chưa có thay đổi"}</span>
@@ -171,9 +187,10 @@ export default function AdminDashboard() {
                     id={inputId}
                     type="number"
                     min={setting.minimum ?? undefined}
-                    max={setting.maximum ?? undefined}
+                    max={setting.key === "CHAT_CONTEXT_WINDOW_TOKENS" ? Number(drafts.MAX_CONVERSATION_TOKENS) || undefined : setting.maximum ?? undefined}
                     step={setting.value_type === "integer" ? 1 : "any"}
                     value={String(drafts[setting.key] ?? "")}
+                    onBlur={() => setDraftState(adjustTokenDrafts)}
                     onChange={(event) => {
                       // Đọc giá trị ngay khi sự kiện còn hiệu lực, không giữ event trong state updater.
                       const value = event.currentTarget.value;
@@ -202,18 +219,6 @@ export default function AdminDashboard() {
           })}
         </details>
       ))}
-
-      <section className="settings-group">
-        <h2>Lịch sử thay đổi gần nhất</h2>
-        <div className="audit-list">
-          {logs.map((log) => (
-            <div key={log.id}>
-              <strong>{settingPresentation(log.target).title}</strong>
-              <span><code>{log.target}</code> · {log.action} · {log.reason}</span>
-            </div>
-          ))}
-        </div>
-      </section>
     </section>
   );
 }

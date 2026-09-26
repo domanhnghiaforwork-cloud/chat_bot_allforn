@@ -29,12 +29,15 @@ class ModelLimiter:
         self, settings: Settings, model: str, estimated_tokens: int
     ) -> QuotaReservation:
         limit = model_limit(settings, model)
+        # OpenAI trả 429 theo hạn mức tài khoản; giới hạn Redis bổ sung là tùy chọn.
+        if settings.ai_provider == "openai" and limit.rpm is None:
+            return QuotaReservation(True, "", 0, estimated_tokens, enforced=False)
         if not settings.redis_url and not settings.async_chat_enabled and not settings.queue_enabled:
             return QuotaReservation(True, "", 0, estimated_tokens, enforced=False)
         # Thiếu quota là cấu hình production chưa hoàn chỉnh: fail-closed.
         if not limit.rpm or not limit.input_tpm or not limit.rpd:
             return QuotaReservation(False, "", 0, estimated_tokens)
-        prefix = f"{settings.gemini_quota_project_id}:{model}"
+        prefix = f"{settings.provider_quota_project_id}:{model}"
         rpm_key = f"quota:{prefix}:rpm"
         tpm_key = f"quota:{prefix}:tpm"
         day, ttl = _provider_day()

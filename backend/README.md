@@ -1,6 +1,48 @@
 # Chatbot v4.2 - Backend
 
-FastAPI + PostgreSQL + Redis Streams + Gemini Gateway, có role, quota và audit.
+FastAPI + PostgreSQL + Redis Streams + Gemini/OpenAI Gateway, có role, quota và audit.
+
+## Chọn nguồn mô hình bằng ENV
+
+Sửa `backend/.env` (Docker Compose cũng đọc file này cho cả API và worker):
+
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_REQUEST_TIMEOUT_SECONDS=60
+```
+
+`OPENAI_MODEL` nhận ID model hỗ trợ Responses API và có quyền truy cập trong tài khoản
+của bạn. Đổi ID này để thêm/sử dụng model OpenAI khác, không cần sửa mã nguồn.
+Đặt `OPENAI_SUMMARY_MODEL` và `OPENAI_ADVANCED_MODEL` nếu muốn model riêng cho tóm tắt
+và chế độ nâng cao; nếu không đặt, cả hai dùng `OPENAI_MODEL`.
+
+Để quay lại Gemini, đặt `AI_PROVIDER=gemini`; các biến `GEMINI_*`, `DEFAULT_MODEL_NAME`,
+`SUMMARY_MODEL_NAME`, `ADVANCED_MODEL_NAME` tiếp tục được sử dụng như trước.
+Chỉ nguồn đang chọn cần API key. Cấu hình model Gemini cũ trong database không thay thế
+các model `OPENAI_*`. Admin vẫn chỉ chỉnh 3 giới hạn token trên giao diện; key đặt ở backend.
+
+Sau khi sửa ENV, khởi động lại **cả API và worker**. Khi cài trực tiếp, cập nhật dependencies
+bằng `pip install -r requirements.txt`. Khi dùng Docker, chạy ở thư mục gốc dự án:
+
+```powershell
+docker compose up -d --build backend worker frontend
+```
+
+OpenAI dùng Responses API cho chat thường và streaming; dùng `/v1/responses/input_tokens`
+để đếm chính xác token gần giới hạn, đồng thời ghi usage vào hệ thống hiện có.
+Request dùng `store=false`; lịch sử hội thoại tiếp tục được quản lý trong database ứng dụng.
+Giới hạn output bao gồm token suy luận nếu model có sử dụng chúng.
+
+Quota OpenAI do provider kiểm soát; lỗi 429 dùng cơ chế retry hiện có. Nếu cần giới hạn
+Redis bổ sung, đặt **đủ** `OPENAI_RPM`, `OPENAI_INPUT_TPM`, `OPENAI_RPD` theo tài khoản;
+các giá trị này áp dụng cho từng model OpenAI. Counter tách riêng khỏi Gemini.
+Các biến `GEMINI_MAX_RETRY_*`/`GEMINI_RETRY_*` hiện hữu vẫn điều khiển chính sách retry
+chung; timeout OpenAI dùng `OPENAI_REQUEST_TIMEOUT_SECONDS`.
+
+Tài liệu chính thức: [Responses API](https://developers.openai.com/api/docs/guides/text),
+[Counting tokens](https://developers.openai.com/api/docs/guides/token-counting).
 
 ## Cài đặt
 

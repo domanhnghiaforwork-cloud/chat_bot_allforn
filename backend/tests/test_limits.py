@@ -13,9 +13,9 @@ class SettingChoiceTest(unittest.TestCase):
         self.assertEqual(
             list(EDITABLE_SETTINGS)[:3],
             [
+                "MAX_CONVERSATION_TOKENS",
                 "CHAT_CONTEXT_WINDOW_TOKENS",
                 "SUMMARY_CONTEXT_WINDOW_TOKENS",
-                "MAX_CONVERSATION_TOKENS",
             ],
         )
 

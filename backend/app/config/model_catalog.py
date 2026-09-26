@@ -23,6 +23,8 @@ class ModelLimit:
 
 def model_limit(settings: "Settings", model: str) -> ModelLimit:
     """Chỉ ánh xạ cấu hình; tuyệt đối không hard-code quota của Google."""
+    if settings.ai_provider == "openai":
+        return ModelLimit(model, settings.openai_rpm, settings.openai_input_tpm, settings.openai_rpd)
     candidates = (
         ModelLimit(
             settings.effective_default_model,

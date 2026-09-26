@@ -3,6 +3,7 @@ from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 
 from google.genai import errors as genai_errors
+import httpx
 
 
 RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
@@ -21,7 +22,7 @@ class LLMError(RuntimeError):
         return self.public_message
 
 
-def _retry_after(exc: genai_errors.APIError) -> int | None:
+def _retry_after(exc: Exception) -> int | None:
     response = getattr(exc, "response", None)
     headers = getattr(response, "headers", None)
     value = headers.get("Retry-After") if headers else None
@@ -39,12 +40,22 @@ def _retry_after(exc: genai_errors.APIError) -> int | None:
 def normalize_provider_error(exc: Exception, *, had_delta: bool = False) -> LLMError:
     if isinstance(exc, LLMError):
         exc.had_delta = exc.had_delta or had_delta
+        if exc.had_delta:
+            exc.retryable = False
         return exc
-    if isinstance(exc, genai_errors.APIError):
-        status = int(exc.code or 0)
-        provider_status = (exc.status or "").upper()
+    if isinstance(exc, (genai_errors.APIError, httpx.HTTPStatusError)):
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else int(exc.code or 0)
+        provider_status = (getattr(exc, "status", None) or "").upper()
+        insufficient_quota = False
+        if isinstance(exc, httpx.HTTPStatusError):
+            try:
+                insufficient_quota = exc.response.json().get("error", {}).get("code") == "insufficient_quota"
+            except (ValueError, AttributeError):
+                pass
         if status == 429:
             code, message = "PROVIDER_RATE_LIMITED", "Dịch vụ AI đang quá tải quota"
+            if insufficient_quota:
+                message = "Tài khoản OpenAI đã hết hạn mức sử dụng; kiểm tra billing"
         elif status in {401, 403}:
             code, message = "PROVIDER_AUTH_ERROR", "Cấu hình xác thực dịch vụ AI không hợp lệ"
         elif status == 404 or "MODEL" in provider_status:
@@ -58,7 +69,7 @@ def normalize_provider_error(exc: Exception, *, had_delta: bool = False) -> LLME
         return LLMError(
             code,
             message,
-            retryable=status in RETRYABLE_STATUS_CODES and not had_delta,
+            retryable=status in RETRYABLE_STATUS_CODES and not had_delta and not insufficient_quota,
             provider_status_code=status,
             retry_after_seconds=_retry_after(exc),
             had_delta=had_delta,

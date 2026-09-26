@@ -9,9 +9,18 @@ from app.config.model_catalog import SUPPORTED_MODEL_IDS
 
 
 class Settings(BaseSettings):
-    # Không đặt giá trị mặc định: toàn bộ cấu hình phải đến từ ENV.
-    gemini_api_key: str
-    gemini_model: str
+    ai_provider: Literal["gemini", "openai"] = "gemini"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash-lite"
+    openai_api_key: str = ""
+    openai_model: str = Field(default="gpt-4.1-mini", min_length=1)
+    openai_summary_model: str | None = None
+    openai_advanced_model: str | None = None
+    openai_request_timeout_seconds: float = Field(default=60, gt=0)
+    openai_quota_project_id: str = "default"
+    openai_rpm: int | None = Field(default=None, gt=0)
+    openai_input_tpm: int | None = Field(default=None, gt=0)
+    openai_rpd: int | None = Field(default=None, gt=0)
     name_chatbot: str = Field(default="OLP AI", min_length=1, max_length=80)
     database_url: str
     jwt_secret_key: str = Field(min_length=32)
@@ -88,6 +97,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_token_ratios(self) -> "Settings":
+        api_key = self.openai_api_key if self.ai_provider == "openai" else self.gemini_api_key
+        if not api_key.strip():
+            raise ValueError(f"{self.ai_provider.upper()}_API_KEY không được để trống")
+        if self.ai_provider == "openai":
+            quotas = (self.openai_rpm, self.openai_input_tpm, self.openai_rpd)
+            if any(value is not None for value in quotas) and not all(value is not None for value in quotas):
+                raise ValueError("Cấu hình đủ OPENAI_RPM, OPENAI_INPUT_TPM và OPENAI_RPD hoặc bỏ cả ba")
         input_parts = (
             self.max_system_prompt_ratio
             + self.max_user_input_ratio
@@ -135,12 +151,16 @@ class Settings(BaseSettings):
                 self.effective_summary_model,
                 self.effective_advanced_model,
             )
-            if model not in SUPPORTED_MODEL_IDS
+            if self.ai_provider == "gemini" and model not in SUPPORTED_MODEL_IDS
         }
         if unsupported:
             raise ValueError(
                 "Model không được hỗ trợ: " + ", ".join(sorted(unsupported))
             )
+        if any(not model.strip() or model != model.strip() for model in (
+            self.effective_default_model, self.effective_summary_model, self.effective_advanced_model,
+        )):
+            raise ValueError("Tên model không được trống hoặc chứa khoảng trắng ở đầu/cuối")
         return self
 
     def chat_token_budget(self, ratio: float) -> int:
@@ -181,15 +201,27 @@ class Settings(BaseSettings):
 
     @property
     def effective_default_model(self) -> str:
+        if self.ai_provider == "openai":
+            return self.openai_model
         return self.default_model_name or self.gemini_model
 
     @property
     def effective_summary_model(self) -> str:
+        if self.ai_provider == "openai":
+            return self.openai_summary_model or self.openai_model
         return self.summary_model_name or self.effective_default_model
 
     @property
     def effective_advanced_model(self) -> str:
+        if self.ai_provider == "openai":
+            return self.openai_advanced_model or self.openai_model
         return self.advanced_model_name or self.effective_default_model
+
+    @property
+    def provider_quota_project_id(self) -> str:
+        if self.ai_provider == "openai":
+            return f"openai:{self.openai_quota_project_id}"
+        return self.gemini_quota_project_id
 
 
 @lru_cache

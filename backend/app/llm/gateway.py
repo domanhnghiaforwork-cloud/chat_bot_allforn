@@ -13,6 +13,7 @@ from app.db.database import SessionLocal
 from app.llm.client import gemini_client
 from app.llm.errors import LLMError, normalize_provider_error
 from app.llm.generation import GenerationResult, estimate_tokens, should_count_exactly
+from app.llm.openai_provider import count_openai_tokens, generate_openai
 from app.memory.context_builder import ChatContext, messages_to_contents
 from app.models import GenerationRequest, Message, ModelUsage
 from app.rate_limit.model_limiter import ModelLimiter
@@ -126,7 +127,7 @@ class LLMGateway:
         settings = await runtime_settings()
         model = route_model(operation, None, settings)
         estimated = estimate_tokens(f"{system_instruction or ''}\n{contents}")
-        if not await ensure_circuit_closed(settings.gemini_quota_project_id, model):
+        if not await ensure_circuit_closed(settings.provider_quota_project_id, model):
             raise LLMError("PROVIDER_UNAVAILABLE", "Circuit model đang mở", retryable=True)
         reservation = await self.model_limiter.reserve(settings, model, estimated)
         if not reservation.allowed:
@@ -136,15 +137,18 @@ class LLMGateway:
             )
         started = time.perf_counter()
         try:
-            async with gemini_client(settings) as client:
-                total = await _provider_count_tokens(
-                    client, model, contents, system_instruction
-                )
+            if settings.ai_provider == "openai":
+                total = await count_openai_tokens(settings, model, contents, system_instruction)
+            else:
+                async with gemini_client(settings) as client:
+                    total = await _provider_count_tokens(
+                        client, model, contents, system_instruction
+                    )
         except Exception as exc:
             error = normalize_provider_error(exc)
             if error.retryable:
                 try:
-                    await record_failure(settings.gemini_quota_project_id, model)
+                    await record_failure(settings.provider_quota_project_id, model)
                 except Exception:
                     logger.warning("circuit_update_failed", extra={"model": model})
             await self._write_usage(
@@ -155,7 +159,7 @@ class LLMGateway:
             raise error from exc
         try:
             await self.model_limiter.reconcile(reservation, total)
-            await record_success(settings.gemini_quota_project_id, model)
+            await record_success(settings.provider_quota_project_id, model)
         except Exception:
             # Provider đã trả kết quả; lỗi housekeeping không được gây gọi lặp.
             logger.warning("quota_reconcile_failed", extra={"model": model})
@@ -211,7 +215,7 @@ class LLMGateway:
         settings = await runtime_settings()
         model = model_override or route_model(operation, requested_model, settings)
         estimated = estimate_tokens(_context_text(context))
-        if not await ensure_circuit_closed(settings.gemini_quota_project_id, model):
+        if not await ensure_circuit_closed(settings.provider_quota_project_id, model):
             raise LLMError("PROVIDER_UNAVAILABLE", "Circuit model đang mở", retryable=True)
         reservation = await self.model_limiter.reserve(settings, model, estimated)
         if not reservation.allowed:
@@ -223,45 +227,59 @@ class LLMGateway:
         started = time.perf_counter()
         had_delta = False
         try:
-            config = types.GenerateContentConfig(
-                system_instruction=context.system_instruction,
-                max_output_tokens=(
-                    settings.max_history_summary_tokens
-                    if operation == "summary"
-                    else settings.max_chat_output_tokens
-                ),
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            )
-            async with gemini_client(settings) as client:
-                if on_delta:
-                    pieces: list[str] = []
-                    final_usage = None
-                    stream = await client.models.generate_content_stream(
-                        model=model, contents=context.contents, config=config
-                    )
-                    async for chunk in stream:
-                        final_usage = chunk.usage_metadata or final_usage
-                        if chunk.text:
-                            had_delta = True
-                            pieces.append(chunk.text)
-                            await on_delta(chunk.text)
-                    text = "".join(pieces)
-                    usage = final_usage
-                else:
-                    response = await client.models.generate_content(
-                        model=model, contents=context.contents, config=config
-                    )
-                    text = response.text or ""
-                    usage = response.usage_metadata
-            if not text:
-                raise LLMError("SAFETY_BLOCKED", "Gemini không trả về nội dung")
-            actual_input = int(usage.prompt_token_count or estimated) if usage else estimated
-            output = int(usage.candidates_token_count or 0) if usage else 0
+            if settings.ai_provider == "openai":
+                async def forward_delta(delta: str) -> None:
+                    nonlocal had_delta
+                    had_delta = True
+                    if on_delta:
+                        await on_delta(delta)
+
+                result = await generate_openai(
+                    settings, model, context.contents, context.system_instruction,
+                    settings.max_history_summary_tokens if operation == "summary" else settings.max_chat_output_tokens,
+                    forward_delta if on_delta else None,
+                )
+                text, actual_input, output = result.text, result.actual_input_tokens, result.output_tokens
+            else:
+                config = types.GenerateContentConfig(
+                    system_instruction=context.system_instruction,
+                    max_output_tokens=(
+                        settings.max_history_summary_tokens
+                        if operation == "summary"
+                        else settings.max_chat_output_tokens
+                    ),
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                )
+                async with gemini_client(settings) as client:
+                    if on_delta:
+                        pieces: list[str] = []
+                        final_usage = None
+                        stream = await client.models.generate_content_stream(
+                            model=model, contents=context.contents, config=config
+                        )
+                        async for chunk in stream:
+                            final_usage = chunk.usage_metadata or final_usage
+                            if chunk.text:
+                                had_delta = True
+                                pieces.append(chunk.text)
+                                await on_delta(chunk.text)
+                        text = "".join(pieces)
+                        usage = final_usage
+                    else:
+                        response = await client.models.generate_content(
+                            model=model, contents=context.contents, config=config
+                        )
+                        text = response.text or ""
+                        usage = response.usage_metadata
+                if not text:
+                    raise LLMError("SAFETY_BLOCKED", "Gemini không trả về nội dung")
+                actual_input = int(usage.prompt_token_count or estimated) if usage else estimated
+                output = int(usage.candidates_token_count or 0) if usage else 0
         except Exception as exc:
             error = normalize_provider_error(exc, had_delta=had_delta)
             if error.retryable:
                 try:
-                    await record_failure(settings.gemini_quota_project_id, model)
+                    await record_failure(settings.provider_quota_project_id, model)
                 except Exception:
                     logger.warning("circuit_update_failed", extra={"model": model})
             await self._write_usage(
@@ -273,7 +291,7 @@ class LLMGateway:
             raise error from exc
         try:
             await self.model_limiter.reconcile(reservation, actual_input)
-            await record_success(settings.gemini_quota_project_id, model)
+            await record_success(settings.provider_quota_project_id, model)
         except Exception:
             logger.warning("quota_reconcile_failed", extra={"model": model})
         await self._write_usage(

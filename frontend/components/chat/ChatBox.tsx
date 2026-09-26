@@ -189,7 +189,6 @@ export default function ChatBox({ conversationId }: { conversationId: string }) 
   return (
     <section className="chat-box">
       <header className="chat-header">
-        <div className="chat-avatar" aria-hidden="true">AI</div>
         <div>
           <h1>{title}</h1>
           <p>Chatbot {chatbotName} · V4.2 · {ASYNC_ENABLED ? "Hàng đợi an toàn" : "Luồng đồng bộ tương thích"}</p>

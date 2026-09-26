@@ -4,6 +4,12 @@ export interface SettingPresentation {
   unit?: string;
 }
 
+export const ADMIN_TOKEN_SETTING_KEYS = [
+  "MAX_CONVERSATION_TOKENS",
+  "CHAT_CONTEXT_WINDOW_TOKENS",
+  "SUMMARY_CONTEXT_WINDOW_TOKENS",
+] as const;
+
 export const GROUP_TITLES: Record<string, string> = {
   "Token Limits": "Giới hạn token",
   "Model/Quota": "Mô hình AI và hạn mức",
@@ -17,6 +23,7 @@ export const SECRET_TITLES: Record<string, string> = {
   REDIS_URL: "Redis",
   JWT_SECRET_KEY: "Khóa ký phiên đăng nhập",
   GEMINI_API_KEY: "Khóa API Gemini",
+  OPENAI_API_KEY: "Khóa API OpenAI",
 };
 
 export const SETTING_PRESENTATION: Record<string, SettingPresentation> = {
@@ -32,7 +39,7 @@ export const SETTING_PRESENTATION: Record<string, SettingPresentation> = {
   },
   MAX_CONVERSATION_TOKENS: {
     title: "Token tối đa của một cuộc hội thoại",
-    description: "Tổng token ước lượng của nội dung user và assistant; khi chạm trần, người dùng phải tạo cuộc trò chuyện mới.",
+    description: "Tổng token ước lượng của nội dung user và assistant; khi chạm trần, người dùng phải tạo cuộc trò chuyện mới. Nếu giảm mức này dưới context window của chat, context chat sẽ tự giảm theo.",
     unit: "token",
   },
   DEFAULT_MODEL_NAME: {

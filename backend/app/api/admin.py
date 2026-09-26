@@ -10,6 +10,7 @@ from app.config.limits import (
     EDITABLE_SETTINGS,
     EditableSetting,
     InvalidSetting,
+    adjust_chat_context,
     validate_relations,
     validate_value,
 )
@@ -21,6 +22,19 @@ from app.queue.manager import QueueManager
 from app.schemas.admin import SettingDelete, SettingUpdate, SettingsBatchUpdate
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _adjust_token_changes(
+    candidate: dict[str, object],
+    changes: list[tuple[str, object, EditableSetting, bool]],
+) -> list[tuple[str, object, EditableSetting, bool]]:
+    if not adjust_chat_context(candidate):
+        return changes
+    key = "CHAT_CONTEXT_WINDOW_TOKENS"
+    # Nếu reset ENV vượt trần, lưu context đã giảm thay vì khôi phục giá trị quá lớn.
+    return [change for change in changes if change[0] != key] + [
+        (key, candidate[key], EDITABLE_SETTINGS[key], False)
+    ]
 
 
 async def _locked_setting_values(session: AsyncSession) -> dict[str, object]:
@@ -84,16 +98,26 @@ async def _persist_setting(
 
 @router.get("/settings")
 async def list_settings(admin: AdminUser):
-    _, settings = await effective_settings()
+    runtime, settings = await effective_settings()
     env = get_settings()
     return {
+        "provider": runtime.ai_provider,
+        "models": {
+            "default": runtime.effective_default_model,
+            "summary": runtime.effective_summary_model,
+            "advanced": runtime.effective_advanced_model,
+        },
         "settings": [asdict(item) for item in settings],
         # Chỉ trả trạng thái, tuyệt đối không trả plaintext secret/URL.
         "secrets": {
             "DATABASE_URL": bool(env.database_url),
             "REDIS_URL": bool(env.redis_url),
             "JWT_SECRET_KEY": bool(env.jwt_secret_key),
-            "GEMINI_API_KEY": bool(env.gemini_api_key),
+            **(
+                {"OPENAI_API_KEY": bool(env.openai_api_key)}
+                if runtime.ai_provider == "openai"
+                else {"GEMINI_API_KEY": bool(env.gemini_api_key)}
+            ),
         },
     }
 
@@ -119,6 +143,7 @@ async def update_settings_batch(
             )
             candidate[change.key] = value
             parsed.append((change.key, value, definition, change.reset))
+        parsed = _adjust_token_changes(candidate, parsed)
         validate_relations(candidate, env.max_history_summary_ratio)
     except InvalidSetting as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -146,16 +171,21 @@ async def update_setting(
         value = validate_value(definition, payload.value)
         candidate = await _locked_setting_values(session)
         candidate[key] = value
+        parsed = _adjust_token_changes(candidate, [(key, value, definition, False)])
         validate_relations(candidate, env.max_history_summary_ratio)
     except InvalidSetting as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    row = await _persist_setting(
-        session, key, value, definition.value_type, admin, payload.reason
-    )
+    row = None
+    for changed_key, changed_value, changed_definition, reset in parsed:
+        changed_row = await _persist_setting(
+            session, changed_key, changed_value, changed_definition.value_type, admin, payload.reason, reset
+        )
+        if changed_key == key:
+            row = changed_row
     await session.commit()
     assert row is not None
-    return {"key": key, "value": value, "source": "override", "version": row.version}
+    return {"key": key, "value": candidate[key], "source": "override", "version": row.version}
 
 
 @router.delete("/settings/{key}")
@@ -168,23 +198,21 @@ async def reset_setting(
     definition = EDITABLE_SETTINGS.get(key)
     if not definition:
         raise HTTPException(status_code=404, detail="Cấu hình không thuộc allowlist")
+    env = get_settings()
     try:
         candidate = await _locked_setting_values(session)
-        candidate[key] = getattr(get_settings(), definition.attr)
-        validate_relations(candidate, get_settings().max_history_summary_ratio)
+        candidate[key] = getattr(env, definition.attr)
+        parsed = _adjust_token_changes(candidate, [(key, candidate[key], definition, True)])
+        validate_relations(candidate, env.max_history_summary_ratio)
     except InvalidSetting as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    await _persist_setting(
-        session,
-        key,
-        getattr(get_settings(), definition.attr),
-        definition.value_type,
-        admin,
-        payload.reason,
-        reset=True,
-    )
+    for changed_key, changed_value, changed_definition, reset in parsed:
+        await _persist_setting(
+            session, changed_key, changed_value, changed_definition.value_type, admin, payload.reason, reset
+        )
     await session.commit()
-    return {"key": key, "source": "env", "value": getattr(get_settings(), definition.attr)}
+    restored_env = next(reset for changed_key, _, _, reset in parsed if changed_key == key)
+    return {"key": key, "source": "env" if restored_env else "override", "value": candidate[key]}
 
 
 @router.get("/audit-logs")
@@ -239,6 +267,7 @@ async def overview(
     settings = await runtime_settings()
     return {
         "queue_depth": queue_depth,
+        "provider": settings.ai_provider,
         "generation_statuses": statuses,
         "usage_24h": {
             "input_tokens": usage[0], "output_tokens": usage[1], "attempts": usage[2]

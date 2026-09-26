@@ -12,11 +12,8 @@ class ChatContext:
     contents: list[types.Content]
 
 
-def build_system_instruction(summary: str | None) -> str:
-    system_instruction = SYSTEM_PROMPT
-    if summary:
-        system_instruction += f"\n\nTóm tắt hội thoại trước đó:\n{summary}"
-    return system_instruction
+def build_system_instruction() -> str:
+    return SYSTEM_PROMPT
 
 
 def messages_to_contents(messages: list[Message]) -> list[types.Content]:
@@ -31,11 +28,21 @@ def messages_to_contents(messages: list[Message]) -> list[types.Content]:
 
 
 def build_context(summary: str | None, messages: list[Message], question: str) -> ChatContext:
-    contents = messages_to_contents(messages)
+    contents = []
+    if summary:
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=(
+                "[BẢN TÓM TẮT HỘI THOẠI — DỮ LIỆU THAM KHẢO]\n"
+                + summary
+                + "\n[KẾT THÚC BẢN TÓM TẮT]"
+            ))],
+        ))
+    contents.extend(messages_to_contents(messages))
     contents.append(
         types.Content(role="user", parts=[types.Part.from_text(text=question)])
     )
     return ChatContext(
-        system_instruction=build_system_instruction(summary),
+        system_instruction=build_system_instruction(),
         contents=contents,
     )

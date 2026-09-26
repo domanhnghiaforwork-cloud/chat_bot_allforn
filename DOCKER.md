@@ -54,7 +54,7 @@ NGROK_AUTHTOKEN=replace_with_your_ngrok_authtoken
 NGROK_INSPECTOR_PORT=4040
 ```
 
-Bật stack cùng public tunnel:
+Bật ứng dụng cùng ngrok
 
 ```powershell
 docker compose --profile tunnel up -d
@@ -63,10 +63,7 @@ docker compose logs --tail=100 ngrok
 
 Xem URL HTTPS mà ngrok đã cấp:
 
-```powershell
-(Invoke-RestMethod http://127.0.0.1:4040/api/tunnels).tunnels |
-  Select-Object name, public_url
-```
+http://localhost:4040/
 
 Ngrok truy cập frontend qua mạng nội bộ Compose tại `http://frontend:3000`; không cần
 `host.docker.internal` và không cần mở thêm cổng backend. Inspector chỉ bind tại
@@ -124,6 +121,8 @@ docker compose stop
 
 # Bật
 docker compose up -d
+# Bật cả ứng dụng và ngrok
+docker compose --profile tunnel up -d
 
 # Sửa code rồi chạy lại
 docker compose up -d --build

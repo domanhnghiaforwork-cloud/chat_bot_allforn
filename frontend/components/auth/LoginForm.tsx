@@ -52,7 +52,7 @@ export default function LoginForm() {
       <button type="submit" disabled={isLoading}>
         {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
       </button>
-      <p className="auth-switch">Chưa có tài khoản? <Link href="/register">Đăng ký</Link></p>
+      {/* <p className="auth-switch">Chưa có tài khoản? <Link href="/register">Đăng ký</Link></p> */}
     </form>
   );
 }

@@ -18,6 +18,7 @@ export interface ConversationTokenUsage {
   utilization_percent: number;
   chat_context_window_tokens: number;
   max_chat_input_tokens: number;
+  max_user_input_tokens: number;
   max_chat_output_tokens: number;
   estimated: boolean;
 }

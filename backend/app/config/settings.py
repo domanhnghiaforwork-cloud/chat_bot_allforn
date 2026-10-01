@@ -30,8 +30,9 @@ class Settings(BaseSettings):
     chat_context_window_tokens: int = Field(gt=0)
     summary_context_window_tokens: int = Field(gt=0)
     max_conversation_tokens: int = Field(gt=0)
+    max_system_prompt_tokens: int = Field(default=500, gt=0)
     max_input_ratio: float = Field(gt=0, le=1)
-    max_system_prompt_ratio: float = Field(gt=0, le=1)
+    max_system_prompt_ratio: float = Field(default=0.0, ge=0, le=1)
     max_user_input_ratio: float = Field(gt=0, le=1)
     max_history_summary_ratio: float = Field(gt=0, le=1)
     max_history_recent_messages_ratio: float = Field(gt=0, le=1)
@@ -104,8 +105,9 @@ class Settings(BaseSettings):
             quotas = (self.openai_rpm, self.openai_input_tpm, self.openai_rpd)
             if any(value is not None for value in quotas) and not all(value is not None for value in quotas):
                 raise ValueError("Cấu hình đủ OPENAI_RPM, OPENAI_INPUT_TPM và OPENAI_RPD hoặc bỏ cả ba")
+        system_ratio = self.max_system_prompt_ratio or 0.0
         input_parts = (
-            self.max_system_prompt_ratio
+            system_ratio
             + self.max_user_input_ratio
             + self.max_history_summary_ratio
             + self.max_history_recent_messages_ratio
@@ -163,16 +165,22 @@ class Settings(BaseSettings):
             raise ValueError("Tên model không được trống hoặc chứa khoảng trắng ở đầu/cuối")
         return self
 
+    @model_validator(mode="after")
+    def validate_system_prompt_budget(self) -> "Settings":
+        from app.config.prompts import SYSTEM_PROMPT
+
+        # Ước lượng bảo thủ (len + 2) // 3 + 50 token dự phòng
+        min_required = max(1, (len(SYSTEM_PROMPT) + 2) // 3) + 50
+        if self.max_system_prompt_tokens < min_required:
+            self.max_system_prompt_tokens = min_required
+        return self
+
     def chat_token_budget(self, ratio: float) -> int:
         return int(self.chat_context_window_tokens * ratio)
 
     @property
     def max_chat_input_tokens(self) -> int:
         return self.chat_token_budget(self.max_input_ratio)
-
-    @property
-    def max_system_prompt_tokens(self) -> int:
-        return self.chat_token_budget(self.max_system_prompt_ratio)
 
     @property
     def max_user_input_tokens(self) -> int:

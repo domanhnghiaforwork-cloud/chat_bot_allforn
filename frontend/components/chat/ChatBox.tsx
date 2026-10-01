@@ -33,7 +33,7 @@ function commandResponse(
   }
   return [
     `Context window của chat: ${TOKEN_FORMATTER.format(usage.chat_context_window_tokens)} token`,
-    `Input tối đa mỗi lượt: ${TOKEN_FORMATTER.format(usage.max_chat_input_tokens)} token`,
+    `Input tối đa mỗi lượt (User Input): ${TOKEN_FORMATTER.format(usage.max_user_input_tokens ?? usage.max_chat_input_tokens)} token`,
     `Output tối đa mỗi lượt: ${TOKEN_FORMATTER.format(usage.max_chat_output_tokens)} token`,
   ].join("\n");
 }

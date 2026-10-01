@@ -24,6 +24,7 @@ class ConversationTokenUsageTest(unittest.IsolatedAsyncioTestCase):
             max_conversation_tokens=100_000,
             chat_context_window_tokens=10_000,
             max_chat_input_tokens=7_500,
+            max_user_input_tokens=1_000,
             max_chat_output_tokens=2_500,
         )
 
@@ -39,6 +40,7 @@ class ConversationTokenUsageTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage["remaining_tokens"], 99_970)
         self.assertEqual(usage["chat_context_window_tokens"], 10_000)
         self.assertEqual(usage["max_chat_input_tokens"], 7_500)
+        self.assertEqual(usage["max_user_input_tokens"], 1_000)
         self.assertEqual(usage["max_chat_output_tokens"], 2_500)
         get_owned.assert_awaited_once_with(
             ANY,

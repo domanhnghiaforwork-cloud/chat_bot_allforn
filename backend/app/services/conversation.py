@@ -64,6 +64,7 @@ async def get_conversation_token_usage(
         ),
         "chat_context_window_tokens": settings.chat_context_window_tokens,
         "max_chat_input_tokens": settings.max_chat_input_tokens,
+        "max_user_input_tokens": settings.max_user_input_tokens,
         "max_chat_output_tokens": settings.max_chat_output_tokens,
         "estimated": True,
     }

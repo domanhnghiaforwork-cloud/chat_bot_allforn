@@ -33,5 +33,6 @@ class ConversationTokenUsage(BaseModel):
     utilization_percent: float
     chat_context_window_tokens: int
     max_chat_input_tokens: int
+    max_user_input_tokens: int
     max_chat_output_tokens: int
     estimated: bool = True

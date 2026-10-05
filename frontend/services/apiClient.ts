@@ -24,7 +24,8 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     const error = (await response.json().catch(() => null)) as {
       detail?: string | { code?: string; message?: string };
     } | null;
-    if (response.status === 401) clearAuthSession();
+    // A late response from account A must not clear account B's new session.
+    if (response.status === 401 && getAccessToken() === token) clearAuthSession();
     const detail = error?.detail;
     throw new ApiError(
       typeof detail === "string" ? detail : detail?.message ?? "Không thể kết nối đến máy chủ",

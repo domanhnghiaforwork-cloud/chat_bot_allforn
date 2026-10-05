@@ -1,6 +1,7 @@
 import type { User } from "../types/auth";
+import { AUTH_STORAGE_KEY, AUTH_REVISION_KEY } from "../config/authSession";
 
-const STORAGE_KEY = "chatbot-auth:v3";
+const STORAGE_KEY = AUTH_STORAGE_KEY;
 export const AUTH_CHANGED_EVENT = "auth-changed";
 
 interface AuthSession {
@@ -24,9 +25,15 @@ export function getAccessToken(): string | null {
   return getAuthSession()?.accessToken ?? null;
 }
 
+export function getAuthRevision(): string | null {
+  if (typeof window === "undefined") return null;
+  try { return localStorage.getItem(AUTH_REVISION_KEY); } catch { return null; }
+}
+
 export function saveAuthSession(accessToken: string, user: User): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken, user }));
+    localStorage.setItem(AUTH_REVISION_KEY, crypto.randomUUID());
   } catch {
     throw new Error("Trình duyệt không cho phép lưu phiên đăng nhập");
   }
@@ -37,6 +44,7 @@ export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(AUTH_REVISION_KEY, crypto.randomUUID());
   } catch {}
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }

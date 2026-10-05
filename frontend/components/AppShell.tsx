@@ -9,8 +9,10 @@ import { getCurrentUser } from "../services/authApi";
 import {
   AUTH_CHANGED_EVENT,
   clearAuthSession,
+  getAccessToken,
   getAuthSession,
 } from "../stores/authStore";
+import { AUTH_STORAGE_KEY, AUTH_REVISION_KEY } from "../config/authSession";
 import type { User } from "../types/auth";
 import { useChatbotName } from "./branding/BrandProvider";
 import ConversationSidebar from "./chat/ConversationSidebar";
@@ -27,9 +29,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isAdminPage = pathname.startsWith("/admin");
 
   useEffect(() => {
-    const refresh = () => setAuthRevision((value) => value + 1);
+    const refresh = () => {
+      setUser(null);
+      setChecking(true);
+      setAuthRevision((value) => value + 1);
+    };
+    const storageChanged = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === null
+          || event.key === AUTH_STORAGE_KEY || event.key === AUTH_REVISION_KEY)) refresh();
+    };
     window.addEventListener(AUTH_CHANGED_EVENT, refresh);
-    return () => window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+    window.addEventListener("storage", storageChanged);
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+      window.removeEventListener("storage", storageChanged);
+    };
   }, []);
 
   useEffect(() => {
@@ -46,7 +60,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     setChecking(true);
     getCurrentUser()
       .then((currentUser) => {
-        if (!active) return;
+        if (!active || getAccessToken() !== session.accessToken) return;
         setUser(currentUser);
         setChecking(false);
         if (isAuthPage) router.replace(currentUser.role === "admin" ? "/admin" : "/chat");
@@ -54,7 +68,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         else if (pathname === "/") router.replace(currentUser.role === "admin" ? "/admin" : "/chat");
       })
       .catch(() => {
-        if (!active) return;
+        if (!active || getAccessToken() !== session.accessToken) return;
         clearAuthSession();
         setUser(null);
         setChecking(false);
@@ -79,15 +93,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <strong>Quản trị Chatbot {chatbotName}</strong>
           <nav><Link href="/chat">Chat</Link><span>{user.email}</span></nav>
         </header>
-        <main className="admin-main">{children}</main>
+        <main key={user.id} className="admin-main">{children}</main>
       </div>
     );
   }
 
   return (
     <div className="app-shell">
-      <ConversationSidebar user={user} />
-      <main>{children}</main>
+      <ConversationSidebar key={`sidebar-${user.id}`} user={user} />
+      <main key={`content-${user.id}`}>{children}</main>
     </div>
   );
 }

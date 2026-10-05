@@ -46,7 +46,7 @@ export default function LoginForm() {
       </label>
       <label>
         Mật khẩu
-        <input name="password" type="password" autoComplete="current-password" minLength={8} required />
+        <input name="password" type="password" autoComplete="current-password" required />
       </label>
       {error && <p className="auth-error">{error}</p>}
       <button type="submit" disabled={isLoading}>

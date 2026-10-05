@@ -4,16 +4,23 @@ from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 
 from app.db.database import get_session
-from app.schemas.auth import AuthCredentials, TokenResponse
+from app.schemas.auth import AuthCredentials, LoginCredentials, TokenResponse
 from app.security.jwt import create_access_token
 from app.services import auth as service
 from app.security.system_sso import authenticate_system_ticket
+from app.security.system_provisioning import provision_system_account
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class SystemTicket(BaseModel):
     ticket: str = Field(min_length=1, max_length=4096)
+
+
+@router.post("/system-provision")
+async def system_provision(payload: SystemTicket, session: AsyncSession = Depends(get_session)):
+    created = await provision_system_account(session, payload.ticket)
+    return JSONResponse({"created": created}, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/system-sso", response_model=TokenResponse)
@@ -40,7 +47,7 @@ async def register(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    payload: AuthCredentials,
+    payload: LoginCredentials,
     session: AsyncSession = Depends(get_session),
 ) -> TokenResponse:
     user = await service.authenticate(session, str(payload.email), payload.password)

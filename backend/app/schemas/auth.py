@@ -12,6 +12,12 @@ class AuthCredentials(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class LoginCredentials(AuthCredentials):
+    # Verify existing credentials; provisioning uses the system's password policy.
+    # Registration continues to enforce AuthCredentials' length limits.
+    password: str = Field(min_length=1)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"

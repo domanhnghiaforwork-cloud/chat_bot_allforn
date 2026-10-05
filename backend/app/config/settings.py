@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(gt=0)
     # Optional, supplied only by the shared gateway deployment.
     chatbot_sso_secret: str = ""
+    chatbot_account_sync_enabled: bool = False
 
     chat_context_window_tokens: int = Field(gt=0)
     summary_context_window_tokens: int = Field(gt=0)

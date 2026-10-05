@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: Literal["HS256", "HS384", "HS512"]
     access_token_expire_minutes: int = Field(gt=0)
+    # Optional, supplied only by the shared gateway deployment.
+    chatbot_sso_secret: str = ""
 
     chat_context_window_tokens: int = Field(gt=0)
     summary_context_window_tokens: int = Field(gt=0)

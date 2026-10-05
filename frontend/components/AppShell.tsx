@@ -23,6 +23,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [authRevision, setAuthRevision] = useState(0);
   const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isSsoPage = pathname === "/sso";
   const isAdminPage = pathname.startsWith("/admin");
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isSsoPage) return;
     let active = true;
     const session = getAuthSession();
     if (!session) {
@@ -61,7 +63,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [authRevision, isAuthPage, pathname, router]);
+  }, [authRevision, isAuthPage, isSsoPage, isAdminPage, pathname, router]);
+
+  if (isSsoPage) return <main className="auth-main">{children}</main>;
 
   if (isAuthPage) {
     return <main className="auth-main">{checking ? <p>Đang kiểm tra...</p> : children}</main>;

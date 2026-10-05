@@ -23,3 +23,9 @@ export function login(credentials: Credentials): Promise<AuthResponse> {
 export function getCurrentUser(): Promise<User> {
   return request("/api/users/me");
 }
+
+export function loginFromSystem(ticket: string): Promise<AuthResponse> {
+  return request("/api/auth/system-sso", {
+    method: "POST", body: JSON.stringify({ ticket }),
+  });
+}

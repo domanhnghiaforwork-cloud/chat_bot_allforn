@@ -1,4 +1,5 @@
 import { getAccessToken } from "../stores/authStore";
+import { appPath } from "../config/paths";
 import type {
   ChatJobAccepted,
   Generation,
@@ -57,7 +58,7 @@ export async function openGenerationEvents(
   onEvent: (event: GenerationEvent) => void,
 ): Promise<string> {
   const token = getAccessToken();
-  const response = await fetch(`/api/generations/${requestId}/events`, {
+  const response = await fetch(appPath(`/api/generations/${requestId}/events`), {
     cache: "no-store",
     headers: {
       Accept: "text/event-stream",

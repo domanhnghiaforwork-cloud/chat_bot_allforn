@@ -120,10 +120,12 @@ services:
       args:
         BACKEND_URL: http://backend:8000
         NEXT_PUBLIC_ASYNC_CHAT_ENABLED: ${ASYNC_CHAT_ENABLED:-true}
+        NEXT_PUBLIC_BASE_PATH: ${CHATBOT_BASE_PATH:-}
     environment:
       BACKEND_URL: http://backend:8000
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      NEXT_PUBLIC_BASE_PATH: ${CHATBOT_BASE_PATH:-}
     ports:
       - "${APP_PORT:-3000}:3000"
     depends_on:

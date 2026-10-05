@@ -1,4 +1,5 @@
 import { clearAuthSession, getAccessToken } from "../stores/authStore";
+import { appPath } from "../config/paths";
 
 export class ApiError extends Error {
   constructor(
@@ -18,7 +19,7 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(url, { cache: "no-store", ...options, headers });
+  const response = await fetch(appPath(url), { cache: "no-store", ...options, headers });
   if (!response.ok) {
     const error = (await response.json().catch(() => null)) as {
       detail?: string | { code?: string; message?: string };

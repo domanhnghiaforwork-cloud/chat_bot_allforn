@@ -43,6 +43,18 @@ async def get_conversation(
     )
 
 
+async def delete_conversation(
+    session: AsyncSession, conversation_id: UUID, user_id: UUID
+) -> bool:
+    conversation = await conversations.get_owned(session, conversation_id, user_id)
+    if not conversation:
+        return False
+    await conversations.delete(session, conversation)
+    await session.commit()
+    return True
+
+
+
 async def get_conversation_token_usage(
     session: AsyncSession, conversation_id: UUID, user_id: UUID
 ) -> dict[str, int | float | bool] | None:

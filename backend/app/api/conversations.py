@@ -45,6 +45,22 @@ async def get_one(
     return conversation
 
 
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_one(
+    conversation_id: UUID,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    deleted = await service.delete_conversation(
+        session, conversation_id, current_user.id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hội thoại"
+        )
+
+
+
 @router.get(
     "/{conversation_id}/token-usage",
     response_model=ConversationTokenUsage,

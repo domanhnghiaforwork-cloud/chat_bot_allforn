@@ -20,3 +20,8 @@ export function createConversation(): Promise<Conversation> {
 export function getConversationTokenUsage(id: string): Promise<ConversationTokenUsage> {
   return request(`/api/conversations/${id}/token-usage`);
 }
+
+export function deleteConversation(id: string): Promise<void> {
+  return request(`/api/conversations/${id}`, { method: "DELETE" });
+}
+

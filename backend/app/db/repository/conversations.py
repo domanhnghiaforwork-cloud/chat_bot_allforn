@@ -37,3 +37,9 @@ async def get_owned(
     if with_messages:
         query = query.options(selectinload(Conversation.messages))
     return await session.scalar(query)
+
+
+async def delete(session: AsyncSession, conversation: Conversation) -> None:
+    await session.delete(conversation)
+    await session.flush()
+

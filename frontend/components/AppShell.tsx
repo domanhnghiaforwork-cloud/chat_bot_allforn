@@ -101,7 +101,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <ConversationSidebar key={`sidebar-${user.id}`} user={user} />
-      <main key={`content-${user.id}`}>{children}</main>
+      <main key={`content-${user.id}`} className="chat-main">{children}</main>
     </div>
   );
 }

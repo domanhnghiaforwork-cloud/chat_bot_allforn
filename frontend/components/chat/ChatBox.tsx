@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { isChatCommandName } from "../../config/chatCommands";
 import { useChatJob } from "../../hooks/useChatJob";
 import { sendMessage } from "../../services/chatApi";
 import {
+  deleteConversation,
   getConversation,
   getConversationTokenUsage,
 } from "../../services/conversationApi";
@@ -39,11 +41,13 @@ function commandResponse(
 }
 
 export default function ChatBox({ conversationId }: { conversationId: string }) {
+  const router = useRouter();
   const chatbotName = useChatbotName();
   const [title, setTitle] = useState("Đang tải...");
   const [messages, setMessages] = useState<Message[]>([]);
   const [commandMessages, setCommandMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [loadError, setLoadError] = useState("");
   const job = useChatJob(conversationId, ASYNC_ENABLED);
@@ -185,32 +189,89 @@ export default function ChatBox({ conversationId }: { conversationId: string }) 
     }
   }
 
+  async function handleDelete() {
+    const confirmed = window.confirm(
+      "Bạn có chắc chắn muốn xóa đoạn chat này không? Tất cả tin nhắn trong đoạn chat sẽ bị xóa vĩnh viễn.",
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteConversation(conversationId);
+      window.dispatchEvent(new Event("conversations-changed"));
+      router.replace("/chat");
+    } catch (caught) {
+      alert(caught instanceof Error ? caught.message : "Không thể xóa đoạn chat");
+      setIsDeleting(false);
+    }
+  }
+
   const jobActive = ASYNC_ENABLED && ["PENDING", "QUEUED", "GENERATING", "RETRYING"].includes(job.status ?? "");
   return (
     <section className="chat-box">
       <header className="chat-header">
-        <div>
-          <h1>{title}</h1>
-          <p>Chatbot {chatbotName} · V4.2 · {ASYNC_ENABLED ? "Hàng đợi an toàn" : "Luồng đồng bộ tương thích"}</p>
+        <div className="chat-header-main">
+          <div className="chat-avatar" aria-hidden="true">AI</div>
+          <div className="chat-header-info">
+            <h1 title={title}>{title}</h1>
+            <p>Chatbot {chatbotName} · V4.2 · {ASYNC_ENABLED ? "Hàng đợi an toàn" : "Luồng đồng bộ tương thích"}</p>
+          </div>
+        </div>
+        <div className="chat-header-actions">
+          <button
+            type="button"
+            className="delete-chat-btn"
+            title="Xóa đoạn chat này"
+            aria-label="Xóa đoạn chat này"
+            disabled={isDeleting || !isReady}
+            onClick={handleDelete}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+            <span>{isDeleting ? "Đang xóa..." : "Xóa đoạn chat"}</span>
+          </button>
         </div>
       </header>
+
       {loadError ? (
-        <p className="load-error">{loadError}</p>
+        <div className="load-error-container">
+          <p className="load-error">{loadError}</p>
+        </div>
       ) : (
         <MessageList messages={displayedMessages} isLoading={isSending || jobActive} partial={job.partial} />
       )}
-      <div>
-        <GenerationStatus
-          status={job.status}
-          queuePosition={job.queuePosition}
-          error={job.error}
-          onCancel={() => void job.cancel()}
-        />
-        <MessageInput
-          disabled={!isReady || isSending || jobActive || Boolean(loadError)}
-          onSend={handleSend}
-        />
-      </div>
+
+      <footer className="chat-footer">
+        <div className="chat-footer-inner">
+          <GenerationStatus
+            status={job.status}
+            queuePosition={job.queuePosition}
+            error={job.error}
+            onCancel={() => void job.cancel()}
+          />
+          <MessageInput
+            disabled={!isReady || isSending || jobActive || Boolean(loadError) || isDeleting}
+            onSend={handleSend}
+          />
+          <div className="chat-footer-hint">
+            <span>Nhấn Enter để gửi, Shift + Enter để xuống dòng · Gõ / để xem lệnh trợ giúp</span>
+          </div>
+        </div>
+      </footer>
     </section>
   );
 }

@@ -30,6 +30,9 @@ async def get_current_user(
     user = await users.get_by_id(session, user_id)
     if not user:
         raise unauthorized
+    # Do not hold an authentication read transaction through configuration
+    # lookups, Redis waits or a long-lived streaming response.
+    await session.commit()
     return user
 
 

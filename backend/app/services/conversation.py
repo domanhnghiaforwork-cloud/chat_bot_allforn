@@ -64,7 +64,7 @@ async def get_conversation_token_usage(
     if not conversation:
         return None
 
-    settings = await runtime_settings()
+    settings = await runtime_settings(session)
     current_tokens = estimate_conversation_tokens(conversation.messages)
     remaining_tokens = max(0, settings.max_conversation_tokens - current_tokens)
     return {
@@ -85,7 +85,7 @@ async def get_conversation_token_usage(
 async def chat(
     session: AsyncSession, conversation_id: UUID, user_id: UUID, question: str
 ) -> tuple[str, Message, Message] | None:
-    settings = await runtime_settings()
+    settings = await runtime_settings(session)
     if not settings.legacy_sync_chat_enabled:
         raise LLMError("INTERNAL_ERROR", "Luồng chat đồng bộ đang tắt")
 

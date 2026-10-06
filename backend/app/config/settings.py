@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     openai_rpd: int | None = Field(default=None, gt=0)
     name_chatbot: str = Field(default="OLP AI", min_length=1, max_length=80)
     database_url: str
+    db_pool_size: int = Field(default=10, ge=1, le=40)
+    db_max_overflow: int = Field(default=10, ge=0, le=40)
+    db_pool_timeout_seconds: float = Field(default=10, gt=0)
+    runtime_settings_cache_seconds: float = Field(default=2, ge=0, le=10)
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: Literal["HS256", "HS384", "HS512"]
     access_token_expire_minutes: int = Field(gt=0)
@@ -62,7 +66,7 @@ class Settings(BaseSettings):
     max_queue_wait_seconds: int = Field(default=900, gt=0)
     queue_event_ttl_seconds: int = Field(default=3600, gt=0)
     queue_job_max_attempts: int = Field(default=4, gt=0)
-    worker_concurrency: int = Field(default=4, gt=0)
+    worker_concurrency: int = Field(default=8, gt=0)
     worker_lease_seconds: int = Field(default=60, gt=5)
 
     gemini_request_timeout_seconds: float = Field(default=60, gt=0)

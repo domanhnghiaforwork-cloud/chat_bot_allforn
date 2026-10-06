@@ -14,7 +14,7 @@ from app.config.limits import (
     validate_relations,
     validate_value,
 )
-from app.config.runtime import effective_settings, runtime_settings
+from app.config.runtime import effective_settings, runtime_settings, invalidate_runtime_settings
 from app.config.settings import get_settings
 from app.db.database import get_session
 from app.models import AdminAuditLog, GenerationRequest, ModelUsage, SystemSetting, utc_now
@@ -97,8 +97,8 @@ async def _persist_setting(
 
 
 @router.get("/settings")
-async def list_settings(admin: AdminUser):
-    runtime, settings = await effective_settings()
+async def list_settings(admin: AdminUser, session: AsyncSession = Depends(get_session)):
+    runtime, settings = await effective_settings(session)
     env = get_settings()
     return {
         "provider": runtime.ai_provider,
@@ -153,6 +153,7 @@ async def update_settings_batch(
             session, key, value, definition.value_type, admin, payload.reason, reset
         )
     await session.commit()
+    invalidate_runtime_settings()
     return {"updated": [key for key, _, _, _ in parsed]}
 
 
@@ -184,6 +185,7 @@ async def update_setting(
         if changed_key == key:
             row = changed_row
     await session.commit()
+    invalidate_runtime_settings()
     assert row is not None
     return {"key": key, "value": candidate[key], "source": "override", "version": row.version}
 
@@ -211,6 +213,7 @@ async def reset_setting(
             session, changed_key, changed_value, changed_definition.value_type, admin, payload.reason, reset
         )
     await session.commit()
+    invalidate_runtime_settings()
     restored_env = next(reset for changed_key, _, _, reset in parsed if changed_key == key)
     return {"key": key, "source": "env" if restored_env else "override", "value": candidate[key]}
 
@@ -264,7 +267,7 @@ async def overview(
         queue_depth = await QueueManager().depth()
     except Exception:
         queue_depth = None
-    settings = await runtime_settings()
+    settings = await runtime_settings(session)
     return {
         "queue_depth": queue_depth,
         "provider": settings.ai_provider,

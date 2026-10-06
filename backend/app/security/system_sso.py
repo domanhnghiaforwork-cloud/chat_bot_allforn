@@ -10,7 +10,7 @@ from app.config.settings import get_settings
 from app.db.repository import users
 from app.models import User
 from app.redis_client import RedisUnavailable, get_redis
-from app.security.password import hash_password
+from app.security.password import hash_password_async
 
 
 async def authenticate_system_ticket(session: AsyncSession, ticket: str) -> User:
@@ -45,7 +45,9 @@ async def authenticate_system_ticket(session: AsyncSession, ticket: str) -> User
     if user:
         # Existing chatbot permissions and password always remain authoritative.
         return user
-    user = User(email=email, password_hash=hash_password(secrets.token_urlsafe(48)), role=claims["role"])
+    await session.commit()
+    password_hash = await hash_password_async(secrets.token_urlsafe(48))
+    user = User(email=email, password_hash=password_hash, role=claims["role"])
     session.add(user)
     try:
         await session.commit()

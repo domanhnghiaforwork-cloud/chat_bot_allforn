@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   agentRules: false,
   basePath: BASE_PATH,
   output: "standalone",
+  experimental: { proxyTimeout: 600_000 },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${backendUrl}/:path*` }];
   },

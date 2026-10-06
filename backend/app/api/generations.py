@@ -31,7 +31,7 @@ async def create_chat_job(
     current_user: CurrentUser,
     session: AsyncSession = Depends(get_session),
 ) -> ChatJobAccepted:
-    settings = await runtime_settings()
+    settings = await runtime_settings(session)
     if not settings.async_chat_enabled or not settings.queue_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -149,7 +149,7 @@ async def cancel_generation(
         generation.updated_at = utc_now()
         await session.commit()
         await QueueManager().complete(request_id)
-        settings = await runtime_settings()
+        settings = await runtime_settings(session)
         await publish_event(
             request_id,
             "failed",

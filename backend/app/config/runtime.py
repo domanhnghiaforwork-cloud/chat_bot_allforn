@@ -1,7 +1,10 @@
 from dataclasses import dataclass
+import asyncio
+import time
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.limits import EDITABLE_SETTINGS, validate_relations, validate_value
 from app.config.settings import Settings, get_settings
@@ -23,13 +26,14 @@ class EffectiveSetting:
     choices: tuple[tuple[str | bool, str], ...] | None
 
 
-async def effective_settings() -> tuple[Settings, list[EffectiveSetting]]:
+async def effective_settings(session: AsyncSession | None = None) -> tuple[Settings, list[EffectiveSetting]]:
     env = get_settings()
-    async with SessionLocal() as session:
-        rows = {
-            row.key: row
-            for row in (await session.scalars(select(SystemSetting))).all()
-        }
+    if session is None:
+        async with SessionLocal() as own_session:
+            loaded = (await own_session.scalars(select(SystemSetting))).all()
+    else:
+        loaded = (await session.scalars(select(SystemSetting))).all()
+    rows = {row.key: row for row in loaded}
 
     values: dict[str, Any] = {}
     output: list[EffectiveSetting] = []
@@ -57,6 +61,31 @@ async def effective_settings() -> tuple[Settings, list[EffectiveSetting]]:
     return runtime, output
 
 
-async def runtime_settings() -> Settings:
-    settings, _ = await effective_settings()
-    return settings
+_cached: Settings | None = None
+_cached_env: Settings | None = None
+_expires_at = 0.0
+_cache_version = 0
+_cache_lock = asyncio.Lock()
+
+
+def invalidate_runtime_settings() -> None:
+    global _cached, _expires_at, _cache_version
+    _cached = None
+    _expires_at = 0.0
+    _cache_version += 1
+
+
+async def runtime_settings(session: AsyncSession | None = None) -> Settings:
+    global _cached, _cached_env, _expires_at
+    env = get_settings()
+    if _cached is not None and _cached_env is env and time.monotonic() < _expires_at:
+        return _cached
+    async with _cache_lock:
+        if _cached is not None and _cached_env is env and time.monotonic() < _expires_at:
+            return _cached
+        version = _cache_version
+        settings, _ = await effective_settings(session)
+        if version == _cache_version:
+            _cached, _cached_env = settings, env
+            _expires_at = time.monotonic() + env.runtime_settings_cache_seconds
+        return settings

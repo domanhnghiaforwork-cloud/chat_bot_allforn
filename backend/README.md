@@ -90,3 +90,18 @@ Tài khoản này được tạo trong migration và nhận toàn bộ hội tho
 - `/admin/*`: chỉ role=admin; setting thay đổi được ghi audit.
 
 Context Gemini vẫn theo v2: `System Prompt + Summary + Recent Messages + Current Question`, với ngân sách token cấu hình hoàn toàn qua ENV.
+# Cấu hình tải đồng thời
+
+API giải phóng transaction xác thực trước khi xử lý tiếp. Cấu hình runtime được cache
+2 giây, cập nhật admin xóa cache của tiến trình hiện tại ngay; tiến trình khác nhận thay
+đổi trong thời gian TTL. Các endpoint có session sẵn dùng lại session khi đọc cấu hình.
+
+`DB_POOL_SIZE=10`, `DB_MAX_OVERFLOW=10`, `DB_POOL_TIMEOUT_SECONDS=10` là mặc định.
+Với 2 API workers và 1 queue worker, trần pool cộng lại là 60 kết nối; cần tính lại nếu
+scale thêm container. Hash/verify Argon2 chạy ngoài event loop, giới hạn hai tác vụ
+đồng thời mỗi tiến trình để giữ RAM ổn định.
+
+`WORKER_CONCURRENCY` mặc định 8. Thay giá trị cần restart worker. Quota OpenAI phải lấy
+từ tài khoản/model thực tế; các trường quota Gemini không áp dụng khi `AI_PROVIDER=openai`.
+Kiểm thử 20 người với câu hỏi ngắn không chứng minh 20 người có thể gửi liên tục các
+context lớn mà không chạm TPM. Theo dõi queue wait, retry, 429 và token usage khi dùng thật.
